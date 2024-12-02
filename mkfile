@@ -12,7 +12,7 @@ ALL=\
 ALLPS=${ALL:%=%.ps}
 HTML=${ALL:%=%.html} 
 PDF=${ALL:%=%.pdf} 
-FILES=vmthread.ms
+FILES=vmthread
 DIRS=vmthread
 NAMES=$FILES $DIRS
 
@@ -26,18 +26,6 @@ dirs:V:
 
 print:V: $ALLPS
 	lp -H -i0 $prereq
-
-title.ps:D:	title
-	troff $prereq | lp -dstdout > $target
-	/sys/doc/cleanps $target
-
-trademarks.ps:D:	/sys/lib/man/trademarks
-	troff $prereq | lp -dstdout > $target
-	/sys/doc/cleanps $target
-
-colophon.ps:D:	/sys/lib/man/colophon
-	troff $prereq | lp -dstdout > $target
-	/sys/doc/cleanps $target
 
 # troff gets some scary-looking errors but they're okay
 &.ps:D:	&.ms
