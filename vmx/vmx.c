@@ -20,7 +20,7 @@ struct VmxNotif {
 
 int mainstacksize = 65536;
 u8int *bump;
-uvlong vmthreadmemsize = 60*1024*1024;
+uvlong vmthreadmemsize = 16*1024*1024;
 u8int *vmbase = (void *)0x1000000;
 u8int *vmcode;
 
@@ -252,12 +252,19 @@ rsetsz(char *reg, uvlong val, int sz)
 	}
 }
 
+// sz is really sz +1, it's easier.
 Region *
-mkregion(u64int pa, u64int end, int type)
+mkregion(void *base, u64int pa, u64int sz, int type)
 {
 	Region *r, *s, **rp;
+	char buf[256];
+	char *sn;
+	u64int end = pa + sz;
+	u8int *gmem;
+	int fd;
 
 	r = emalloc(sizeof(Region));
+	sn = malloc(256);
 	if(end < pa) sysfatal("end of region %p before start of region %#p", (void*)end, (void*)pa);
 	if((pa & BY2PG-1) != 0 || (end & BY2PG-1) != 0) sysfatal("address %#p not page aligned", (void*)pa);
 	r->start = pa;
@@ -270,6 +277,37 @@ mkregion(u64int pa, u64int end, int type)
 		;
 	r->next = *rp;
 	*rp = r;
+
+	// now allocate it for realz.
+	snprint(sn, 256, "sn.%p.%p", base,(uvlong)base+sz);
+	gmem = segattach(0, sn, base, sz);
+	if(gmem == (void*)-1){
+		snprint(buf, sizeof(buf), "#g/sn.%p.%p", base,(uvlong)base+sz);
+		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
+		if(fd < 0) sysfatal("create: %r");
+		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
+		fd = open(buf, OWRITE|OTRUNC);
+		if(fd < 0) sysfatal("open: %r");
+		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)base, sz);
+		if(write(fd, buf, strlen(buf)) < 0){
+			print("fucwk\n");
+			while (1);
+			 sysfatal("write: %r");
+		}
+		close(fd);
+		gmem = segattach(0, sn, vmbase, sz);
+		if(gmem == (void*)-1) {
+			print("fuck\n");
+			while (1);
+			sysfatal("segattach: %r");
+		}
+	}else{
+		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
+	}
+
+		r->v = gmem;
+		r->ve = (u8int*)r->v + sz;
+	modregion(r);
 	return r;
 }
 
@@ -326,63 +364,6 @@ void *
 gend(void *v)
 {
 	return (u8int *) v + gavail(v);
-}
-
-static void
-mksegment(char *sn)
-{
-	uintptr sz;
-	int fd;
-	Region *r;
-	char buf[256];
-	u8int *gmem, *p;
-
-	sz = BY2PG; /* temporary page */
-	sz += 256*1024; /* vga */
-	for(r = mmap; r != nil; r = r->next){
-		if((r->type & REGALLOC) == 0)
-			continue;
-		r->segname = sn;
-		if(sz + (r->end - r->start) < sz)
-			sysfatal("out of address space");
-		sz += r->end - r->start;
-	}
-	// The first segment is for the kernel, should we run one.
-	// We place it at 16MiB, so that the kernel can be as low in
-	// guest physical as possible.
-	// The next segment is the 2M to 16M region for the program.
-	// It is copied there, not shared (yet).
-	// If we finish EPT=KPT work, then none of this will matter.
-	gmem = segattach(0, sn, vmbase, sz);
-	print("Allocated %#x bytes at %#x\n", sz, gmem);
-	if(gmem == (void*)-1){
-		snprint(buf, sizeof(buf), "#g/%s", sn);
-		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
-		if(fd < 0) sysfatal("create: %r");
-		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
-		fd = open(buf, OWRITE|OTRUNC);
-		if(fd < 0) sysfatal("open: %r");
-		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", vmbase, (uvlong)sz);
-		if(write(fd, buf, strlen(buf)) < 0) sysfatal("write: %r");
-		close(fd);
-		gmem = segattach(0, sn, vmbase, sz);
-		if(gmem == (void*)-1) sysfatal("segattach: %r");
-	}else{
-		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
-	}
-	vmcode = vmbase + vmthreadmemsize;
-	p = gmem;
-	for(r = mmap; r != nil; r = r->next){
-		if(r->segname == nil) continue;
-		r->segoff = p - gmem;
-		r->v = p;
-		p += r->end - r->start;
-		r->ve = p;
-	}
-
-	for(r = mmap; r != nil; r = r->next)
-		modregion(r);
-
 }
 
 void
@@ -607,6 +588,7 @@ vmthreadchan(int elemsize, int elemcnt)
 int
 vmthreadcreate(void*)
 {
+	Region *r = nil;
 	debug++;
 
 	quotefmtinstall();
@@ -616,14 +598,14 @@ vmthreadcreate(void*)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	
-	mkregion((uvlong)vmbase, (uvlong)vmbase + vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
-	vmcode = vmbase + vmthreadmemsize;
+	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	vmbase = r->v;
 	bump = vmbase;
-	mkregion((uvlong)0x200000, (uvlong)vmbase, REGALLOC|REGRWX);
+	r = mkregion(r->ve, (uvlong)0x200000, (uvlong)vmbase-0x200000, REGALLOC|REGRWX);
+	vmcode = (void *) r->v;
 	vmxsetup();
-	mksegment("vmthread");
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
-	memmove(vmcode, (void *)0x200000, 0xe00000);
+	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
 	runloop();
 	return 0;
 }
