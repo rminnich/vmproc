@@ -576,20 +576,12 @@ usage(void)
 	threadexitsall("usage");
 }
 
-void (*kconfig)(void);
-
 void
-threadmain(int argc, char **argv)
+vmthreadcreate(void*)
 {
-	static int (*edev[16])(char *);
-	static char *edevt[nelem(edev)];
-	static char *edevaux[nelem(edev)];
-	static int edevn;
 	static uvlong gmemsz = 64*1024*1024;
-	static char *srvname;
-	extern uintptr fbsz, fbaddr;
-	int newwin = 0;
 	int i;
+	debug++;
 
 	quotefmtinstall();
 	mainid = threadid();
@@ -597,95 +589,10 @@ threadmain(int argc, char **argv)
 	waitch = chancreate(sizeof(char *), 32);
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
-
-	ARGBEGIN {
-	case 'm':
-		bootmod = realloc(bootmod, (bootmodn + 1) * sizeof(char *));
-		bootmod[bootmodn++] = strdup(EARGF(usage()));
-		break;
-	case 's':
-		segname = strdup(EARGF(usage()));
-		segrclose = 0;
-		break;
-	case 'c':
-		uartinit(0, EARGF(usage()));
-		break;
-	case 'C':
-		uartinit(1, EARGF(usage()));
-		break;
-	case 'n':
-		assert(edevn < nelem(edev));
-		edev[edevn] = mkvionet;
-		edevt[edevn] = "virtio network";
-		edevaux[edevn++] = strdup(EARGF(usage()));
-		break;
-	case 'd':
-		assert(edevn < nelem(edev));
-		edevaux[edevn] = strdup(EARGF(usage()));
-		if(strncmp(edevaux[edevn], "ide:", 4) == 0){
-			edevaux[edevn] += 4;
-			edev[edevn] = mkideblk;
-			edevt[edevn] = "ide block";
-		}else{
-			edev[edevn] = mkvioblk;
-			edevt[edevn] = "virtio block";
-		}
-		edevn++;
-		break;
-	case 'D':
-		debug++;
-		break;
-	case 'M':
-		gmemsz = siparse(EARGF(usage()));
-		if(gmemsz != (uintptr) gmemsz) sysfatal("too much memory for address space");
-		break;
-	case 'w':
-		newwin = 1;
-	case 'v':
-		vgafbparse(EARGF(usage()));
-		break;
-	case '9':
-		if(srvname != nil) usage();
-		srvname = EARGF(usage());
-		break;
-	case L'ι':
-		setiodebug(EARGF(usage()));
-		break;
-	default:
-		usage();
-	} ARGEND;
-	if(argc < 1) usage();
-	cmdlinen = argc - 1;
-	cmdlinev = argv + 1;
 	
-	if(gmemsz < 1<<20) sysfatal("640 KB of RAM is not enough for everyone");
-	mkregion(0, 0xa0000, REGALLOC|REGFREE|REGRWX);
-	mkregion(0xa0000, 0xc0000, REGALLOC|REGRWX);
-	mkregion(0xc0000, 0x100000, REGALLOC|REGRES|REGRWX);
-	if(fbsz != 0 && fbaddr < gmemsz){
-		mkregion(0x100000, fbaddr, REGALLOC|REGFREE|REGRWX);
-		mkregion(fbaddr + fbsz, gmemsz, REGALLOC|REGFREE|REGRWX);
-	}else
-		mkregion(0x100000, gmemsz, REGALLOC|REGFREE|REGRWX);
-	if(fbsz != 0){
-		if(fbaddr < 1<<20) sysfatal("framebuffer must not be within first 1 MB");
-		if(fbaddr != (u32int) fbaddr || (u32int)(fbaddr+fbsz) < fbaddr) sysfatal("framebuffer must be within first 4 GB");
-		mkregion(fbaddr, fbaddr+fbsz, REGALLOC|REGRWX);
-	}
+	mkregion(0x1000000, gmemsz, REGALLOC|REGFREE|REGRWX);
 	vmxsetup();
-	mksegment(segname);
-	loadkernel(argv[0]);
-	pciinit();
-
-	vgainit(newwin);
-	for(i = 0; i < edevn; i++)
-		if(edev[i](edevaux[i]) < 0)
-			sysfatal("%s: %r", edevt[i]);
-
-	pcibusmap();
-	
-	if(srvname != nil) init9p(srvname);
-	if(kconfig != nil) kconfig();
+	mksegment("vmthread");
 	runloop();
 	exits(nil);
 }
