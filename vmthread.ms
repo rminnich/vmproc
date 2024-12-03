@@ -164,7 +164,69 @@ This API is designed to be familiar to pthreads users. There is
 one compilation unit; all data and code share an address space; 
 it uses a fork/join model. The only difference, not really visible
 at first, is that all the threads run in a VM.
-threads can call host functions with the vmcall. 
+Threads can call host functions with the vmcall. Interestingly enough, 
+since the address space is shared, threads can call libc functions to format
+strings, and then print them with the vmcall.
+.SH
+Moving this model to 9front
+.LP
+There are two aspects of Akaros virtualization model that require impactful, albeit small (2500 lines total), changes.
+.LP
+The first is the implementation of Ring V. Processes need to record which
+ring they are returning to; they need to store extra state for Ring V (about 8k); and
+they need the additional assembly support. These changes are not large, but they
+are hard to get right. They add complexity to the kernel.
+.LP
+Second is the code to implement host process virtual and guest physical identity mapping.
+In Akaros, this is achieved by having every host page table page paired with a guest page table page -- i.e., every page table page is now 8k, not 4k. 
+People tend to worry when they hear this, but the actual impact is quite minor: 
+on an 8 GiB machine the memory for page table pages increases by 16 MiB. 
+We have implemented this change, with a boot time command line argument. I.e., it does
+not require recompiling the kernel.
+.LP
+Nevertheless, before making such far reaching changes, we decided to take a less
+impactful approach, levering the way that Plan 9 threads work.
+.SH 
+A quick review of Plan 9 libthread
+.LP
+Plan 9 threads are lightweight, non-preemptive coroutines, running in one or more
+processes which share memory; and processes which do not share memory
+but share the process code image and run threads. 
+A single thead in the same process is created by 
+.CW threadcreate.
+A thread in a new process is created by 
+.CW procrfork.
+An independent process which begins with a copy of the process is calle 
+.CW proccreate.
+.LP
+To these we add vmcreate.
+vmcreate is a mixture of proccreate and procrfork, because we can not completely
+share all the memory until we implement Akaros-style guest/host memory sharing. 
+That said, we can get close.
+.LP
+On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (EPT) and the host mappings (KPT) all point to the same memory. To keep it shorter, we will call this ID, meaning Identity mapped host virtual and guest physical memory. All that it means is that a guest physical address and a host virtual address point to the same thing; 
+hosts and guests can communicate pointers to each other without having to translate 
+them.
+.LP
+For Plan 9, vmcreate maps a large middle data area via segattach, and maps it at 0xe00000 (14 MiB). This is enough to allow 1 MiB for low guest physical memory; 1 MiB for the
+shared frame buffer, and a large shared ID area for the guest and host.
+The memory from 2 MiB to 14 MiB is not shared between host and guest. The kernel must
+be loaded at 16 MiB, and be able to function with a 15 MiB hole starting at 1 MiB. 
+Fortunately, modren kernels, including Plan 9, work fine with this hole. The days of
+having to load at the 1 MiB boundary are long gone.
+.LP
+The result is that a large fraction of the memory is shared between guest and host: starting at the 16 MiB boundary, and up to the size of the VM, all memory is shared
+and all pointers are interchangeable. This is particularly useful for virtio, since
+that uses ring buffers to pass pointers.
+Process stack is not accessible from the guest. The guest has a copy of the host text,
+data, and BSS at the time of process creation, but that is not shared.
+.LP
+For non-Plan 9 systems, fitting a full VMM in 14 MiB would be very difficult. The 
+9front VMM, called vmx, is only 512 KiB, which is anywhere from 10 to 100 times smaller
+than many Linux VMMs. 14 MiB is more than enough.
+.SH
+Code
+.LP
 
 .SH
 References
