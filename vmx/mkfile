@@ -29,6 +29,9 @@ OFILES=\
 	rendez.$O\
 	sched.$O\
 	vmx.$O\
+	exith.$O\
+	nanosec.$O\
+	x86.$O\
 
 CFILES=\
 	386.c\
@@ -62,6 +65,9 @@ CFILES=\
 	test.c\
 	tprimes.c\
 	vmx.c\
+	exith.c\
+	nanosec.c\
+	x86.c\
 
 HFILES=\
 	/sys/include/thread.h\

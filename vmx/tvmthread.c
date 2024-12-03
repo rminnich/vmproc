@@ -6,7 +6,7 @@ int quiet;
 int goal;
 int buffer;
 int (*fn)(void(*)(void*), void*, uint) = threadcreate;
-
+int vmthreadcreate(void*);
 void
 primethread(void *arg)
 {
@@ -51,6 +51,10 @@ threadmain(int argc, char **argv)
 	else
 		goal = 100;
 
+	// Just create it to test.
+	if (vmthreadcreate(nil) < 0) {
+		exits("vmthreadcreate failed");
+	}
 	c = chancreate(sizeof(ulong), buffer);
 	threadcreate(primethread, c, 1024);
 	for(i=2;; i++)

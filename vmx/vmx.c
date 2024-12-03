@@ -19,6 +19,11 @@ struct VmxNotif {
 };
 
 int mainstacksize = 65536;
+u8int *bump;
+uvlong vmthreadmemsize = 64*1024*1024;
+u8int *vmbase = (void *)0x1000000;
+u8int *vmcode;
+
 
 void *
 emalloc(ulong sz)
@@ -337,7 +342,13 @@ mksegment(char *sn)
 			sysfatal("out of address space");
 		sz += r->end - r->start;
 	}
-	gmem = segattach(0, sn, nil, sz);
+	// The first segment is for the kernel, should we run one.
+	// We place it at 16MiB, so that the kernel can be as low in
+	// guest physical as possible.
+	// The next segment is the 2M to 16M region for the program.
+	// It is copied there, not shared (yet).
+	// If we finish EPT=KPT work, then none of this will matter.
+	gmem = segattach(0x1000000, sn, nil, sz);
 	if(gmem == (void*)-1){
 		snprint(buf, sizeof(buf), "#g/%s", sn);
 		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
@@ -473,7 +484,7 @@ runloop(void)
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
-			processexit(waitmsg);
+			threadexits("vmthread exits");
 			free(waitmsg);
 			break;
 		case SLEEP:
@@ -576,8 +587,6 @@ usage(void)
 	threadexitsall("usage");
 }
 
-u8int *bump = (void *)0x1000000;
-
 Channel*
 vmthreadchan(int elemsize, int elemcnt)
 {
@@ -593,11 +602,9 @@ vmthreadchan(int elemsize, int elemcnt)
 	return c;
 }
 
-
-void
+int
 vmthreadcreate(void*)
 {
-	static uvlong gmemsz = 64*1024*1024;
 	debug++;
 
 	quotefmtinstall();
@@ -607,9 +614,13 @@ vmthreadcreate(void*)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	
-	mkregion(0x1000000, gmemsz, REGALLOC|REGFREE|REGRWX);
+	mkregion((uvlong)vmbase, vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	vmcode = vmbase + vmthreadmemsize;
+	bump = vmbase;
+	mkregion((uvlong)vmcode, 0xe00000, REGALLOC|REGFREE|REGRWX);
 	vmxsetup();
 	mksegment("vmthread");
+	memmove(vmcode, (void *)0x200000, 0xe00000);
 	runloop();
-	exits(nil);
+	return 0;
 }
