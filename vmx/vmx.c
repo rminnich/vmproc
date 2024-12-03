@@ -20,7 +20,7 @@ struct VmxNotif {
 
 int mainstacksize = 65536;
 u8int *bump;
-uvlong vmthreadmemsize = 64*1024*1024;
+uvlong vmthreadmemsize = 60*1024*1024;
 u8int *vmbase = (void *)0x1000000;
 u8int *vmcode;
 
@@ -68,6 +68,11 @@ ctl(char *fmt, ...)
 void
 modregion(Region *r)
 {
+	print("Modregion %c%c%c wb %#ullx %#ullx %s %#ullx\n",
+			(r->type & REGR) != 0 ? 'r' : '-',
+			(r->type & REGW) != 0 ? 'w' : '-',
+			(r->type & REGX) != 0 ? 'x' : '-',
+			(uvlong)r->start, (uvlong)r->end, r->segname, (uvlong)r->segoff);
 	if(r->segname == nil){
 		if(fprint(mapfd, "--- wb %#ullx %#ullx\n", (uvlong)r->start, (uvlong)r->end) < 0)
 			vmerror("updating memory map: %r");
@@ -348,7 +353,8 @@ mksegment(char *sn)
 	// The next segment is the 2M to 16M region for the program.
 	// It is copied there, not shared (yet).
 	// If we finish EPT=KPT work, then none of this will matter.
-	gmem = segattach(0x1000000, sn, nil, sz);
+	gmem = segattach(0, sn, vmbase, sz);
+	print("Allocated %#x bytes at %#x\n", sz, gmem);
 	if(gmem == (void*)-1){
 		snprint(buf, sizeof(buf), "#g/%s", sn);
 		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
@@ -356,14 +362,15 @@ mksegment(char *sn)
 		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
 		fd = open(buf, OWRITE|OTRUNC);
 		if(fd < 0) sysfatal("open: %r");
-		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", 0x10000000ULL, (uvlong)sz);
+		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", vmbase, (uvlong)sz);
 		if(write(fd, buf, strlen(buf)) < 0) sysfatal("write: %r");
 		close(fd);
-		gmem = segattach(0, sn, nil, sz);
+		gmem = segattach(0, sn, vmbase, sz);
 		if(gmem == (void*)-1) sysfatal("segattach: %r");
 	}else{
 		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
 	}
+	vmcode = vmbase + vmthreadmemsize;
 	p = gmem;
 	for(r = mmap; r != nil; r = r->next){
 		if(r->segname == nil) continue;
@@ -372,12 +379,6 @@ mksegment(char *sn)
 		p += r->end - r->start;
 		r->ve = p;
 	}
-	/* vga */
-	r = regptr(0xa0000);
-	r->segoff = p - gmem;
-	r->v = p;
-	p += 256*1024;
-	r->ve = p;
 
 	for(r = mmap; r != nil; r = r->next)
 		modregion(r);
@@ -615,12 +616,13 @@ vmthreadcreate(void*)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	
-	mkregion((uvlong)vmbase, vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	mkregion((uvlong)vmbase, (uvlong)vmbase + vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmcode = vmbase + vmthreadmemsize;
 	bump = vmbase;
-	mkregion((uvlong)vmcode, 0xe00000, REGALLOC|REGFREE|REGRWX);
+	mkregion((uvlong)0x200000, (uvlong)vmbase, REGALLOC|REGRWX);
 	vmxsetup();
 	mksegment("vmthread");
+	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, 0xe00000);
 	runloop();
 	return 0;
