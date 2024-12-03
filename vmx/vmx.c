@@ -484,12 +484,13 @@ runloop(void)
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
-			threadexits("vmthread exits");
 			free(waitmsg);
+			threadexits("vmthread exits");
 			break;
 		case SLEEP:
-			pitadvance();
-			rtcadvance();
+			threadexits("fix me");
+			//pitadvance();
+			//rtcadvance();
 			break;
 		case NOTIF:
 			notif.f(notif.arg);

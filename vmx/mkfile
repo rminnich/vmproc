@@ -30,6 +30,7 @@ OFILES=\
 	sched.$O\
 	vmx.$O\
 	exith.$O\
+	io.$O\
 	nanosec.$O\
 	x86.$O\
 
@@ -66,6 +67,7 @@ CFILES=\
 	tprimes.c\
 	vmx.c\
 	exith.c\
+	io.c\
 	nanosec.c\
 	x86.c\
 
@@ -91,3 +93,5 @@ $O.tprimes: tprimes.$O $LIB
 
 $O.tvmthread: tvmthread.$O $LIB
 	$LD -o $target $prereq
+
+test: $O.tvmthread

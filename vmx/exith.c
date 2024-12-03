@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <thread.h>
 #include "dat.h"
 #include "fns.h"
 #include "x86.h"
@@ -423,6 +424,12 @@ hlt(ExitInfo *ei)
 	if(irqactive < 0)
 		state = VMHALT;
 	skipinstr(ei);
+}
+
+void irqack(int n)
+{
+	print("irqack %d\n", n);
+	threadexits("irqack not handled, exit");
 }
 
 static void
