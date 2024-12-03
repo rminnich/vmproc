@@ -576,11 +576,28 @@ usage(void)
 	threadexitsall("usage");
 }
 
+u8int *bump = (void *)0x1000000;
+
+Channel*
+vmthreadchan(int elemsize, int elemcnt)
+{
+	Channel *c;
+
+	if(elemcnt < 0 || elemsize <= 0)
+		return nil;
+	c = (Channel *)bump;
+	bump += sizeof(Channel)+elemsize*elemcnt;
+	c->e = elemsize;
+	c->s = elemcnt;
+	//	_threaddebug(DBGCHAN, "chancreate %p", c);
+	return c;
+}
+
+
 void
 vmthreadcreate(void*)
 {
 	static uvlong gmemsz = 64*1024*1024;
-	int i;
 	debug++;
 
 	quotefmtinstall();
