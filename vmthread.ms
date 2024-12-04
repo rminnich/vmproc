@@ -335,6 +335,21 @@ higher address. The decision on where to split the shared and unshared memory is
 Code
 .LP
 Below we present some examples of the threading in action.
+.LP
+The first example shows an infinite loop. 
+.P1
+	vmthreadinit(16*1024*1024, 64*1024*1024);
+	static u8int brdot[] = {0xeb, 0xfe};
+
+	if (vmthreadcreate(brdot, (void *)0x1000000, 1024) < 0) {
+		exits("vmthreadcreate failed");
+	}
+.P2
+For this first example, we show the vmthreadinit call; we will not show it again. 
+Vmthreadcreate is called with pointer to brdot, which is the 2-byte infinite loop for x86.
+This shows the ease with which both a VMM and a guest VM can be set up in the same program.
+
+
 .SH
 References
 .LP
