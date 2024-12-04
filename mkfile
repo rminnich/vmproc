@@ -16,7 +16,9 @@ FILES=vmthread
 DIRS=vmthread
 NAMES=$FILES $DIRS
 
-all:V: ${FILES:%=%.ps} dirs
+all:V: vmthread.pdf
+
+# all:V: ${FILES:%=%.ps} dirs
 
 dirs:V:
 	for(i in $DIRS) @{
