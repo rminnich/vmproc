@@ -606,9 +606,9 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
-	u8int brdot[] = {0xeb, 0xfe};
+	static u8int brdot[] = {0xeb, 0xfe};
 	memmove(vmbase, brdot, 2);
-	rset(RPC, (uvlong)vmbase);
+	rset(RPC, (uvlong)brdot); //(uvlong)vmbase);
 	rset(RSP, (uvlong)vmbase + vmthreadmemsize);
 	runloop();
 	return 0;
