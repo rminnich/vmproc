@@ -6,7 +6,8 @@ int quiet;
 int goal;
 int buffer;
 int (*fn)(void(*)(void*), void*, uint) = threadcreate;
-int vmthreadcreate(void*);
+int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize);
+Channel*vmthreadchan(int elemsize, int elemcnt);
 void
 primethread(void *arg)
 {
@@ -52,7 +53,8 @@ threadmain(int argc, char **argv)
 		goal = 100;
 
 	// Just create it to test.
-	if (vmthreadcreate(nil) < 0) {
+//	c = vmthreadchan(sizeof(ulong), buffer);
+	if (vmthreadcreate(primethread, (void *)0x1000000, 1024) < 0) {
 		exits("vmthreadcreate failed");
 	}
 	c = chancreate(sizeof(ulong), buffer);

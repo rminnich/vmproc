@@ -586,7 +586,7 @@ vmthreadchan(int elemsize, int elemcnt)
 }
 
 int
-vmthreadcreate(void*)
+vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 {
 	Region *r = nil;
 	debug++;
@@ -606,6 +606,7 @@ vmthreadcreate(void*)
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+	rset(RPC, (uvlong)fn);
 	runloop();
 	return 0;
 }
