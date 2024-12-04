@@ -598,12 +598,12 @@ vmthreadcreate(void*)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	
+	vmxsetup();
 	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
 	r = mkregion(r->ve, (uvlong)0x200000, (uvlong)vmbase-0x200000, REGALLOC|REGRWX);
 	vmcode = (void *) r->v;
-	vmxsetup();
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
 	runloop();
