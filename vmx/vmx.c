@@ -614,10 +614,12 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 int
 vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 {
-	static u8int brdot[] = {0xeb, 0xfe};
-	memmove(vmbase, brdot, 2);
-	rset(RPC, (uvlong)brdot); //(uvlong)vmbase);
+	//static u8int brdot[] = {0xeb, 0xfe};
+	//	memmove(vmbase, brdot, 2);
+	//rset(RPC, (uvlong)brdot); //(uvlong)vmbase);
+	rset(RPC, (uvlong)fn);
 	rset(RSP, (uvlong)vmbase + vmthreadmemsize);
+	rset(RARG, (uvlong)arg);
 	runloop();
 	return 0;
 }

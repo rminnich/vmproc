@@ -36,6 +36,9 @@ enum {
 #define R15 "r15"
 #define RFLAGS "flags"
 
+// calling conventions.
+#define RARG RDI
+
 enum {
 	MMIORD = 0,
 	MMIOWRP = 1,
