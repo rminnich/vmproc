@@ -32,6 +32,7 @@ primethread(void *arg)
 void
 threadmain(int argc, char **argv)
 {
+	u8int brdot[] = {0xeb, 0xfe};
 	int i;
 	Channel *c;
 
@@ -51,10 +52,10 @@ threadmain(int argc, char **argv)
 		goal = atoi(argv[0]);
 	else
 		goal = 100;
-
+ 
 	// Just create it to test.
 //	c = vmthreadchan(sizeof(ulong), buffer);
-	if (vmthreadcreate(primethread, (void *)0x1000000, 1024) < 0) {
+	if (vmthreadcreate((void *)0x1000000, (void *)0x1000000, 1024) < 0) {
 		exits("vmthreadcreate failed");
 	}
 	c = chancreate(sizeof(ulong), buffer);

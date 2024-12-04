@@ -304,7 +304,7 @@ mkregion(void *base, u64int pa, u64int sz, int type)
 	}else{
 		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
 	}
-
+		r->segname = sn;
 		r->v = gmem;
 		r->ve = (u8int*)r->v + sz;
 	modregion(r);
@@ -588,7 +588,7 @@ vmthreadchan(int elemsize, int elemcnt)
 int
 vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 {
-	Region *r = nil;
+	Region *r;
 	debug++;
 
 	quotefmtinstall();
@@ -602,11 +602,13 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
-	r = mkregion(r->ve, (uvlong)0x200000, (uvlong)vmbase-0x200000, REGALLOC|REGRWX);
+	r = mkregion(r->ve, (uvlong)0x200000, (uvlong)vmbase-0x200000, REGALLOC|REGFREE|REGRWX);
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
-	rset(RPC, (uvlong)fn);
+	u8int brdot[] = {0xeb, 0xfe};
+	memmove(vmbase, brdot, 2);
+	rset(RPC, (uvlong)vmbase);
 	rset(RSP, (uvlong)vmbase + vmthreadmemsize);
 	runloop();
 	return 0;
