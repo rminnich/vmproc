@@ -52,7 +52,8 @@ threadmain(int argc, char **argv)
 		goal = atoi(argv[0]);
 	else
 		goal = 100;
- 
+	void vmthreadinit(uvlong lowmemsize, uvlong highmemsize);
+	vmthreadinit(16*1024*1024, 64*1024*1024);
 	// Just create it to test.
 //	c = vmthreadchan(sizeof(ulong), buffer);
 	if (vmthreadcreate((void *)0x1000000, (void *)0x1000000, 1024) < 0) {

@@ -290,15 +290,11 @@ mkregion(void *base, u64int pa, u64int sz, int type)
 		if(fd < 0) sysfatal("open: %r");
 		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)base, sz);
 		if(write(fd, buf, strlen(buf)) < 0){
-			print("fucwk\n");
-			while (1);
 			 sysfatal("write: %r");
 		}
 		close(fd);
 		gmem = segattach(0, sn, vmbase, sz);
 		if(gmem == (void*)-1) {
-			print("fuck\n");
-			while (1);
 			sysfatal("segattach: %r");
 		}
 	}else{
@@ -585,11 +581,16 @@ vmthreadchan(int elemsize, int elemcnt)
 	return c;
 }
 
-int
-vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
+int inited = 0;
+
+void
+vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 {
 	Region *r;
 	debug++;
+
+	if (inited)
+		return;
 
 	quotefmtinstall();
 	mainid = threadid();
@@ -597,15 +598,22 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 	waitch = chancreate(sizeof(char *), 32);
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
-	
+	vmthreadmemsize = highmemsize;
+	vmbase = (void *)lowmemsize;
+
 	vmxsetup();
 	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
-	r = mkregion(r->ve, (uvlong)0x200000, (uvlong)vmbase-0x200000, REGALLOC|REGFREE|REGRWX);
+	r = mkregion(r->ve, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+}
+
+int
+vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
+{
 	static u8int brdot[] = {0xeb, 0xfe};
 	memmove(vmbase, brdot, 2);
 	rset(RPC, (uvlong)brdot); //(uvlong)vmbase);
