@@ -8,6 +8,8 @@ int buffer = 256;
 int test;
 int (*fn)(void(*)(void*), void*, uint) = threadcreate;
 int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize);
+extern u8int *vmbase;
+
 Channel*vmthreadchan(int elemsize, int elemcnt);
 void
 primethread(void *arg)
@@ -28,6 +30,35 @@ primethread(void *arg)
 		if(i%p)
 			sendul(nc, i);
 	}
+}
+
+void
+pong(void *arg)
+{
+	Channel *c;
+	int p;
+	extern void *vmbase;
+
+	c = arg;
+	c = (void *) 0x1000000;
+	while (1) {
+		p = recvul(c);
+		sendul(c, p+1);
+	
+
+	}
+}
+
+void
+setter(void *arg)
+{
+	uvlong *c;
+	int p;
+	extern void *vmbase;
+
+//	c = arg;
+	c = (void *) 0x1000000;
+	while (1) {		*c++;}
 }
 
 void
@@ -70,10 +101,24 @@ threadmain(int argc, char **argv)
 			if (vmthreadcreate((void *)brdot, (void *)0x1000000, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
+			break;
 		case 1:
+			print("now run setter\n");
+			if (vmthreadcreate(setter, vmbase, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			print("setter created\n");
+			for(i = 0; i < 1024 * 1024; i++) {
+				if (*(uvlong*)vmbase != 0)
+					break;
+			}
+			print("ran setter, *vmbase is %lld\n", *(uvlong*)vmbase);
+			break;
+		// This test will not work until we get KPT=EPT. 		
+		case -1:
 			i = 221;
 			c = vmthreadchan(sizeof(ulong), buffer);
-			print("Plain old channel send ...");
+			print("vmtheadchan@%p send ...", c);
 			sendul(c, i);
 			print("Sent ... recv j ...");
 			j = recvul(c);
@@ -84,6 +129,21 @@ threadmain(int argc, char **argv)
 			print("Sent ... recv j ...");
 			j = recvul(c);
 			print("sent %d got %d\n", i, j);
+			print("now run pong\n");
+			if (vmthreadcreate(pong, c, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			while(1) {
+				print("Send i ...");
+				sendul(c, i);
+				print("Sent ... recv j ...");
+				j = recvul(c);
+				print("sent %d got %d\n", i, j);
+				i = j;
+			}	
+			break;
+		case -2:
+			c = vmthreadchan(sizeof(ulong), buffer);
 			print("now run primethread\n");
 			if (vmthreadcreate(primethread, c, 1024) < 0) {
 				exits("vmthreadcreate failed");
@@ -92,6 +152,7 @@ threadmain(int argc, char **argv)
 				sendul(c, i);
 
 			print("ran primethread\n");
+			break;
 
 	}
 

@@ -462,11 +462,12 @@ runloop(void)
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
+			print("%s\n", waitmsg);
 			free(waitmsg);
 			threadexits("vmthread exits");
 			break;
 		case SLEEP:
-			threadexits("fix me");
+			print("SLEEP fix me");
 			//pitadvance();
 			//rtcadvance();
 			break;
