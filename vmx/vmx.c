@@ -22,6 +22,7 @@ int mainstacksize = 65536;
 u8int *bump;
 uvlong vmthreadmemsize = 16*1024*1024;
 u8int *vmbase = (void *)0x1000000;
+u8int *vmend = (void *)(0x1000000 + 16*1024*1024);
 u8int *vmcode;
 
 
@@ -448,6 +449,8 @@ runloop(void)
 	proccreate(sleeperproc, nil, 4096);
 	launch();
 	for(;;){
+		print("; %d;\n", *vmbase);
+		yield();
 		enum {
 			WAIT,
 			SLEEP,
@@ -601,6 +604,7 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	vmthreadmemsize = highmemsize;
 	vmbase = (void *)lowmemsize;
+	vmend = vmbase + lowmemsize;
 
 	vmxsetup();
 	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);

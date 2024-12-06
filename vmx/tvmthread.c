@@ -36,29 +36,44 @@ void
 pong(void *arg)
 {
 	Channel *c;
-	int p;
 	extern void *vmbase;
+	int p;
 
 	c = arg;
 	c = (void *) 0x1000000;
 	while (1) {
 		p = recvul(c);
 		sendul(c, p+1);
-	
-
 	}
 }
 
 void
 setter(void *arg)
 {
-	uvlong *c;
-	int p;
-	extern void *vmbase;
+	u8int *c;
+	extern u8int *vmbase, *vmend;
+	uvlong *p;
 
-//	c = arg;
-	c = (void *) 0x1000000;
-	while (1) {		*c++;}
+	c = arg;
+//	c = (void *) 5; // 0x1000000;
+//	c = vmbase;
+	for(p = (void *)vmbase; p < (void *)vmend; p++)
+		*p = (uvlong)vmend - (uvlong)p;
+
+	while (1) {	*c = 1;}
+}
+
+void
+watcher(void *arg)
+{
+	uvlong *c;
+
+	c = arg;
+	print("watcher: *c is %d\n", *c);
+	while (! *c){
+		print(".%d.", *c);
+		yield();
+	}
 }
 
 void
@@ -103,15 +118,13 @@ threadmain(int argc, char **argv)
 			}
 			break;
 		case 1:
+			threadcreate(watcher, vmbase, 1024);
 			print("now run setter\n");
-			if (vmthreadcreate(setter, vmbase, 1024) < 0) {
+			if (vmthreadcreate(setter, (void *)9, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
 			print("setter created\n");
-			for(i = 0; i < 1024 * 1024; i++) {
-				if (*(uvlong*)vmbase != 0)
-					break;
-			}
+
 			print("ran setter, *vmbase is %lld\n", *(uvlong*)vmbase);
 			break;
 		// This test will not work until we get KPT=EPT. 		

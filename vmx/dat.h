@@ -37,7 +37,7 @@ enum {
 #define RFLAGS "flags"
 
 // calling conventions.
-#define RARG RDI
+#define RARG RBP
 
 enum {
 	MMIORD = 0,
