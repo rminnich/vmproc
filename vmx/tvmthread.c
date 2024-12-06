@@ -53,13 +53,15 @@ setter(void *arg)
 	u8int *c;
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
+	uvlong poison;
+	for (int i = 0; i < 8; i++)
+		poison = poison<<8 | (uvlong)"POISON?!"[i];
 
 	c = arg;
 //	c = (void *) 5; // 0x1000000;
 //	c = vmbase;
 	for(p = (void *)vmbase; p < (void *)vmend; p++)
-		*p = (uvlong)vmend - (uvlong)p;
-
+		*p = poison;
 	while (1) {	*c = 1;}
 }
 
@@ -72,6 +74,7 @@ watcher(void *arg)
 	print("watcher: *c is %d\n", *c);
 	while (! *c){
 		print(".%d.", *c);
+		sleep(1000);
 		yield();
 	}
 }

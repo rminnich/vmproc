@@ -255,55 +255,33 @@ rsetsz(char *reg, uvlong val, int sz)
 
 // sz is really sz +1, it's easier.
 Region *
-mkregion(void *base, u64int pa, u64int sz, int type)
+mkregion(char *sn, void *base, uvlong off,  u64int pa, u64int sz, int type)
 {
 	Region *r, *s, **rp;
-	char buf[256];
-	char *sn;
 	u64int end = pa + sz;
-	u8int *gmem;
-	int fd;
+	u8int *c = base;
+
+	// probe it.
+	*c = 0;
 
 	r = emalloc(sizeof(Region));
-	sn = malloc(256);
 	if(end < pa) sysfatal("end of region %p before start of region %#p", (void*)end, (void*)pa);
 	if((pa & BY2PG-1) != 0 || (end & BY2PG-1) != 0) sysfatal("address %#p not page aligned", (void*)pa);
 	r->start = pa;
 	r->end = end;
 	r->type = type;
+	r->segoff = off;
 	for(s = mmap; s != nil; s = s->next)
-		if(!(pa < s->start && end < s->end || pa >= s->start && pa >= s->end))
-			sysfatal("region %#p-%#p overlaps region %#p-%#p", (void*)pa, (void*)end, (void*)s->start, (void*)s->end);
+	if(!(pa < s->start && end < s->end || pa >= s->start && pa >= s->end))
+		sysfatal("region %#p-%#p overlaps region %#p-%#p", (void*)pa, (void*)end, (void*)s->start, (void*)s->end);
 	for(rp = &mmap; (*rp) != nil && (*rp)->start < end; rp = &(*rp)->next)
 		;
 	r->next = *rp;
 	*rp = r;
 
-	// now allocate it for realz.
-	snprint(sn, 256, "sn.%p.%p", base,(uvlong)base+sz);
-	gmem = segattach(0, sn, base, sz);
-	if(gmem == (void*)-1){
-		snprint(buf, sizeof(buf), "#g/sn.%p.%p", base,(uvlong)base+sz);
-		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
-		if(fd < 0) sysfatal("create: %r");
-		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
-		fd = open(buf, OWRITE|OTRUNC);
-		if(fd < 0) sysfatal("open: %r");
-		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)base, sz);
-		if(write(fd, buf, strlen(buf)) < 0){
-			 sysfatal("write: %r");
-		}
-		close(fd);
-		gmem = segattach(0, sn, vmbase, sz);
-		if(gmem == (void*)-1) {
-			sysfatal("segattach: %r");
-		}
-	}else{
-		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
-	}
-		r->segname = sn;
-		r->v = gmem;
-		r->ve = (u8int*)r->v + sz;
+	r->segname = sn;
+	r->v = base;
+	r->ve = (u8int*)r->v + sz;
 	modregion(r);
 	return r;
 }
@@ -591,6 +569,11 @@ void
 vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 {
 	Region *r;
+	char sn[256], buf[256];
+	uvlong sz;
+	void *gmem;
+	int fd;
+
 	debug++;
 
 	if (inited)
@@ -605,19 +588,44 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	vmthreadmemsize = highmemsize;
 	vmbase = (void *)lowmemsize;
 	vmend = vmbase + lowmemsize;
-
+	sz = lowmemsize + highmemsize;
 	vmxsetup();
-	r = mkregion(vmbase, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	// now allocate it for realz.
+	snprint(sn, sizeof(sn), "sn.%p.%p", (uvlong)vmbase,sz);
+	gmem = segattach(0, sn, vmbase, sz);
+	if(gmem == (void*)-1){
+		snprint(buf, sizeof(buf), "#g/sn.%p.%p", vmbase,sz);
+		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
+		if(fd < 0) sysfatal("create: %r");
+		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
+		fd = open(buf, OWRITE|OTRUNC);
+		if(fd < 0) sysfatal("open: %r");
+		// attach it all. 
+		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)vmbase, sz);
+		if(write(fd, buf, strlen(buf)) < 0){
+			 sysfatal("write: %r");
+		}
+		close(fd);
+		gmem = segattach(0, sn, vmbase, sz);
+		if(gmem == (void*)-1) {
+			sysfatal("segattach: %r");
+		}
+	}else{
+		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
+	}
+
+	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
-	r = mkregion(r->ve, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
+	print("region %p->%p\n", r->v, r->ve);
+	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
 }
 
 int
-vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
+vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
 {
 	//static u8int brdot[] = {0xeb, 0xfe};
 	//	memmove(vmbase, brdot, 2);
