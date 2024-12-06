@@ -1,6 +1,6 @@
 .HTML "VMThreds: virtual machines as threads in libthread"
 .TL
-VMThreds: virtual machines as threads in libthread
+VMThreads: virtual machines as threads
 .FS
 License: CC-BY-ND-SA
 .FE
@@ -9,20 +9,18 @@ Ron Minnich
 .sp
 rminnich@gmail.com
 .AB
-.FS
-a footnote
-.I
-in italics
-.R
-and more
-.FE
-On modern operating systems, virtual machines (VMs) are provided by a device abstraction. Programs open a device, and operate on it as they would a type of network card. This interface is difficult enough that,
-17 years after KVM was created for Linux, there are only a handful of commonly used Virtual Machine Managers (VMMs). 
+Virtualization is a capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
+VMs require a virtual machine manager, or VMM. 
+On modern operating systems, virtual machines (VMs) are supported by hardware, and  are managed by kernels, and presented to VMMs,
+as a device. 
+VMMs open a device, and operate on it as they would any other real device, such as a network card. This interface is difficult enough that,
+17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
 .LP
-On the Akaros operating system, we created a new model, vmthreads, in which VMs were created, and managed, as though they were just another thread. This model provided a far more convenient abstraction for virtual machines. In this model, writing a VMM is no longer a big deal; people can write a VMM as easily as they
-write 
-.I cat(1).
-Adding a VMM to a program is as easy as adding a thread; adding more cores just needs more threads.
+On the Akaros operating system, we created a new model, vmthreads, in which VMs were created, and managed, as though they were just another thread. 
+This model provided a far more convenient abstraction for virtual machines: 
+it was no longer necessary to write VMMs; a VM was created and control as a thread in a multithreaded program.
+.LP
+Adding a VM to a program is as easy as adding a thread; adding more cores just needs more threads.
 Creating and using a VMM is no more exotic than file I/O.
 .LP
 We discuss the implementation of this model on the 9front release of Plan 9. While the model is not quite as complete as the Akaros version, 
@@ -41,16 +39,17 @@ While virtualization is common, it is not easy to write code for.
 The device model provided by most kernels (e.g. Linux) is tricky and easy to get wrong, with 
 difficult to understand failures. 
 It is also large :
-Virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
+Virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
+Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
 .LP
 In this paper we introduce 
-.I VMThreads
+.I VMThreads,
 a virtualization model which is incorporated into the Plan 9 thread library. 
 VMThreads, as the name implies, allows users to create and run VMs as a thread in a process.
 For example, this code starts an infinite loop as a VM thread, running in guest ring 0 on an x86.
 .P1
 extern void *vmbase;
-static u8int brdot[] = {0xeb, 0xfe};
+static u8int brdot[] = {0xeb, 0xfe}; // 1: jmp 1b
 vmthreadcreate((void *)brdot, vmbase, 1024);
 .P2
 The API is identical to the threadcreate API from libthread.
@@ -62,39 +61,52 @@ and then show examples of its use.
 .SH
 Virtualization
 .LP
-Virtualization allows privileged software to run in an unprivileged context, a.k.a., a guest, under control of a host. The guest provides services required by applications, that might not be provided by the host (.e.g Linux running as a guest on OSX); and a security boundary for the the host, protecting it from the guest. Virtualization has been available since the 1960s on IBM mainframes. 
+Virtualization allows privileged software to run in an unprivileged context, a.k.a., a guest, under control of a host. 
+Virtualization provides services required by applications, that might not be provided by the host (.e.g Linux running as a guest on OSX); 
+and a security boundary for the the host, protecting it from the guest. 
+Virtualization has been available since the 1960s on IBM mainframes. 
 .LP
 Until the release of VMWare several decades ago, virtualization
 had been almost ignored in non-mainframe operations. 
-Since then, howeve,r virtualization has become very widely used, and even taken for granted, on a wide range of systems, including inexpensive laptops such as Chromebooks, up to and including the largest cloud servers. 
+Since then, however virtualization has become very widely used, and even taken for granted, on a wide range of systems, 
+including inexpensive laptops such as Chromebooks, up to and including the largest cloud servers. 
 .LP
 Once virtualization became more popular, users  wished for
 an alternative to proprietary virtualization 
-software. Xen was an early open source virtualization system for commodity x86 systems, and was widely deployed on Amazon Web Services cloud. 
+software. Xen was an early open source virtualization system for commodity x86 systems, and was widely deployed on Amazon Web Services. 
 .LP
-Xen is a kernel which runs other kernels as a VM guest, as "Domains", with one kernel ("Domain 0")
+Xen is a kernel which runs other kernels as a VM guest, i.e. "Domains", with one kernel ("Domain 0")
 being given special priveleges to perform IO, since Xen has no drivers
 of its own. 
 Xen is always the host, and kernels are always the guest. In Xen, every kernel runs
 at a lower privilege level than the Xen kernel. 
 .LP
-Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used. There are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
+Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used. 
+There are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
 .LP
 Unlike Xen, 
 KVM, VMWare, and other VMs run as a driver in a host kernel, usually Linux.
 In this model, a single general purpose host kernel is more 
 privileged than the virtual machine software, which in turn is more privileged than any VM guest. 
+The driver manages architectural features that enable and control virtualization. 
 .LP
-The arguments over classifying these types of VMs may never end. But, commonly, Xen is called a Type 1 hypervisor, as it is in itself a kernel
+Xen and KVM are structurally very different systems. 
+The arguments over classifying these types of VMs may never end, but, commonly, Xen is called a Type 1 hypervisor, as it is in itself a kernel
 above all other kernels; and KVM,the BSD VMs, the OSX and Plan 9 VMs;  are called a Type 2, as they are contained
 in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type 2 kernels. When we use the term VM, we are 
 discussing a Type 2 VM.
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
-.I Virtual Machine Manager (VMM).
-The VMM is a program that operates on the VM to load, run, and manage a guest. As the guest VM runs, it will stop with error codes, which 
-must be managed by the VMM. In some cases, the VMM can be called upon to emulate some instructions. VMMs are very complex, and, consequently, can be very large. We know of one proprietary VMM which is 500 MiB; at the same time, a basic VMM, written in C, can be as small as a megabyte. Typically, the larger VMM has support for more complicated operations. 
-A common open source VMM is qemu, but there are many others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux, 
+Virtual Machine Manager (VMM).
+The VMM is a program that operates on the VM to load, run, and manage a guest. As the guest VM runs, it will stop with error codes, interrupts,
+or by the guest itself requesting services;  which 
+must be managed by the VMM. 
+In some cases, the VMM can be called upon to emulate some instructions. 
+VMMs can be very complex, and, consequently, can be very large. 
+We know of one proprietary VMM which is a 500 MiB binary; 
+at the same time, a basic VMM, written in C, can be as small as a megabyte. 
+Typically, samller VMMs can not handle the varying demands of guests; the larger VMM has support for more complicated operations. 
+A common open source VMM is qemu, but there are many others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
 .LP
 With few exeptions, the VM API is built around a device model, frequently
 requiring special privilege to access. 
@@ -103,31 +115,38 @@ use the VM open the device and use a file descriptor to control it.
 The separateness of the device is always apparent. The abstraction
 is complicated and not convenient.
 .SH
-Akaros virtualization: VMs are threads
+Akaros virtualization: VMs as threads
 .FS
-.FE
 https://github.com/brho/akaros. See the patches starting at ddb9fa78b5d97e4107a9404f4146140ef8bf9a5a from 
 April 1, 2015 and on (yes, April Fool's day!).
+.FE
 .LP
 As part of our Akaros research at Google, we developed an entirely
-new VM model, by adding a new protection label we called Ring V.
+new VM model, by adding a new program protection level we called Ring V.
+Ring V is identical to the X86 Ring 3, a.k.a user mode, save that it is a VM.
 When the Akaros kernel exits Ring 0 (kernel) to the program, it
 checks a flag in
- the process structure and either does
-a traditional exit to Ring 3, using the saved trap context; 
-or to Ring V, using the VM Control Structure (VMCS) context.  
+the process structure and either does
+a traditional exit to Ring 3, using the saved trap context and RETI (return from interrupt) instruction;
+or to Ring V, using the VM Control Structure (VMCS) context and a VMRESUME instruction.  
 Akaros can decide, each time it resumes a process, whether to resume it in Ring 3 or Ring V. 
-Processes can flip back and forth across the boundary at will. 
+Processes can flip back and forth between the two modes at will. 
 .LP
-Akaros takes the model one step further: the guest physical address space is the same as process virtual address space. A VMM can start a kernel by starting a vmthread with the kernel entry point as the initial program counter (PC). VMMs can even run user programs in Guest Ring 0, i.e. as kernels. One use of a Guest Ring 0 program would be a device driver.
+Akaros takes the model one step further: the guest physical address space is the same as process virtual address space. 
+A VMM can start a kernel by starting a vmthread with the kernel entry point as the initial program counter (PC). 
+VMMs can even run user programs in Guest Ring 0, i.e. as kernels. One use of a Guest Ring 0 program would be a device driver, which could safely
+contain the device I/O in the VM. 
 .LP
-How does this look in practice? 
+How do VMThreads look in practice? 
 Shown below is a function that runs in the guest. It is called
 thread_entry, and is part of a single file containing both
 the VMM and the guest code. They can be compiled into one unit
 because the guest physical addresses and the host virtual addresses
 are the same; in fact, the guest physical memory is provided
-directly from the host virtual memroy.
+directly from the host virtual memory.
+This code also shows the use of 
+.I vmcall,
+an instruction which allows a guest to request system-call like operations on the host.
 .LP 
 .P1
 static void thread_entry(void *arg)
@@ -142,9 +161,9 @@ static void thread_entry(void *arg)
 .P2
 The function prints out several numbers, via vmcall, which exits the 
 guest, and resumes in the host program vmcall handler. 
-The parameters to vmcall are placed in registers, following
+The parameters to vmcall are placed in registers, by the compiler, following
 the 64-bit x86 calling convention. 
-There are two standard vmcalls used in this example, though there are more:
+There are two standard vmcalls used in this example:
 VTH_VMCALL_PRINTC and VTH_VMCALL_EXIT; VTH_VMCALL_TEST1 is a custom 
 vmcall implemented in this same program.
 .LP
@@ -155,8 +174,10 @@ enum {
 	MY_VMCALL_TEST2,
 };
 
-/* Here's how you can make your own vmcalls and still use the vth vmcalls for
- * the stuff you don't want to reimplement. */
+/* Here's how you can make your own vmcalls and still 
+ * use the standard vthread vmcalls for
+ * standard operations. You also have the option
+ * to replace or extend the standard operations. */
 static bool extended_handle_vmcall(struct guest_thread *gth,
                                    struct vm_trapframe *vm_tf)
 {
@@ -164,12 +185,18 @@ static bool extended_handle_vmcall(struct guest_thread *gth,
 	case MY_VMCALL_TEST1:
 		goto out_ok;
 	}
+	// call this for standard vmcalls.
 	return vth_handle_vmcall(gth, vm_tf);
 out_ok:
 	vm_tf->tf_rip += 3;
 	return TRUE;
 };
 
+/* Structure to define a virtual machine.
+ * In this example, we tell Akaros that we have
+ * a custom vmcall handler, and initialize the
+ * mutex (.mtx) structure member.
+ */
 static struct virtual_machine vm = {.vmcall = extended_handle_vmcall,
                                     .mtx = UTH_MUTEX_INIT};
 .P2
@@ -177,12 +204,17 @@ There is an enum, which defines several test vmcalls; and a function,
 extended_handle_vmcall, which implements the vmcall itself. 
 If the vmcall is not handled by this function, as determined by the
 switch, then the standard vth_handle_vmcall function is used.
+If the .vmcall structure member in the virtual_machine struct is left
+unset, then the Akaros libraries provide a default handler.
 .FS
 I no longer remember why we coded it this way, instead of using 
-a default in the switch.
+a default in the switch. It may be because of the needed manipulation
+of the return address (tf_rip).
 .FE
 .LP
-Finally, we can show the VMM itself. This examples runs 5 VMs concurrently. 
+Finally, we can show the VMM itself. This examples runs 5 VMs simultaneously, i.e. on 5 cores.
+This is a multi-threaded program running several VMs on several cores at once. This is the
+technique we use to start an SMP kernel such as Linux.
 .P1
 int main(int argc, char **argv)
 {
@@ -254,13 +286,16 @@ processes which share memory.
 The model also allows creation of processes which do not share memory, if required;
 these share the process code image and also run their own threads. We will not consider that additional
 external process model here, as it has no bearing on VMThreads.
-A single thead in the same process is created by 
+.LP
+In libthread,
+a single thread in the same process is created by 
 .CW threadcreate.
 We follow this naming convention: VMThreads are created with vmthreadcreate.
 .SH
 9front vmx device
 .LP
-From the man page:
+From the 9front man page:
+.P1
 The vmx device supports "virtual CPUs" using the Intel VT-x
 extension (a.k.a. VMX instruction set).  This is used by
 vmx(1) to implement virtual machines.  Access to the vmx
@@ -268,6 +303,7 @@ device is restricted to the hostowner.
 
 The top level directory contains a clone file and numbered
 subdirectories representing the allocated virtual CPUs.
+.P2
 .LP
 The device presents VMs as files:
 .P1
@@ -286,11 +322,13 @@ In the next section, we describe how we implement VMThreads with libthread and d
 .SH
 VMThreads on 9front
 .LP
-On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (EPT) and the host mappings (KPT) all point to the same memory. To keep it shorter, we will call this ID, meaning Identity mapped host virtual and guest physical memory. All that it means is that a guest physical address and a host virtual address point to the same thing; 
+As mentioned, on Akaros, the guest physical address space is mapped 1:1 with the process virtual address space.
+On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (EPT) and the host mappings (KPT) all point to the same memory. To keep it shorter, we will call this ID, meaning Identity mapped host virtual and guest physical memory. 
+All that it means is that a guest physical address and a host virtual address point to the same thing; 
 hosts and guests can communicate pointers to each other without having to translate 
 them.
 .LP
-The ID mapping for guest to host is not implemented. However, most of the effect can be obtained, as 
+We have not imlemented ID mapping for guest to host. However, most of the effect can be obtained, as 
 the 9front vmx command does, by using segattach. The VMM creates a global segment, then directs the VM instance, 
 via the  ctl file, to use that segment for part of its memory. The result is that the
 VMM and the VM are using a common memory segment. 
@@ -307,7 +345,7 @@ be loaded at 16 MiB, and be able to function with a 15 MiB hole starting at 1 Mi
 Fortunately, modern kernels, including Plan 9, work fine with this hole. The days of
 having to load at the 1 MiB boundary are long gone.
 .FS
-To have 9front boot at 16 MiB requires a 3-line change mkfile:
+To have 9front boot at 16 MiB requires a 3-line change to the kernel mkfile:
 .P1
 -KTZERO=0xffffffff81110000
 -APBOOTSTRAP=0xffffffff81007000
@@ -345,9 +383,12 @@ The first example shows an infinite loop.
 		exits("vmthreadcreate failed");
 	}
 .P2
-For this first example, we show the vmthreadinit call; we will not show it again. 
+For this first example, we show the vmthreadinit call; Since it is required setup code, we will not show it again.
+VMThreads functions test whether vmthreadinit has been called and will return with an error if it has not.
+.LP
 Vmthreadcreate is called with pointer to brdot, which is the 2-byte infinite loop for x86.
 This shows the ease with which both a VMM and a guest VM can be set up in the same program.
+The VM is run by a VMM function, runloop, which starts the VM and calls yield(), allowing other threads to run while the VM runs.
 
 
 .SH
