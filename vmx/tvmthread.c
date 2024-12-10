@@ -60,7 +60,7 @@ setter(void *arg)
 	c = arg;
 //	c = (void *) 5; // 0x1000000;
 //	c = vmbase;
-	for(p = (void *)vmbase; p < (void *)vmend; p++)
+	for(p = (void *)/*vmbase*/0x1000000; p < (void *)vmend; p++)
 		*p = poison;
 	while (1) {	*c = 1;}
 }

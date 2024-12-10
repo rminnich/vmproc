@@ -358,8 +358,10 @@ launch(void)
 	char *s;
 
 	s = rcflush(1);
+	print("GO!\n");
 	if(ctl("go %s", s == nil ? "" : s) < 0)
 		sysfatal("go %s: %r", s == nil ? "" : s);
+	print("go is back; getexit %d\n", getexit);
 	getexit++;
 }
 
@@ -372,12 +374,13 @@ waitproc(void *)
 
 	threadsetname("waitexit");
 	for(;;){
+		memset(buf, 0, sizeof(buf));
 		rc = read(waitfd, buf, sizeof(buf) - 1);
 		if(rc < 0)
 			sysfatal("read: %r");
-		buf[rc] = 0;
 		p = strchr(buf, '\n');
 		if(p != nil) *p = 0;
+		print("waitproc: %s\n", buf);
 		sendp(waitch, strdup(buf));
 	}
 }
@@ -453,6 +456,7 @@ runloop(void)
 			//rtcadvance();
 			break;
 		case NOTIF:
+			print("NOTIF\n");
 			notif.f(notif.arg);
 			break;
 		}
@@ -610,9 +614,9 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 		if(gmem == (void*)-1) {
 			sysfatal("segattach: %r");
 		}
-	}else{
-		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
-	}
+	} 
+		memset(gmem, 0, sz);
+
 
 	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
