@@ -175,7 +175,7 @@ threadmain(int argc, char **argv)
 	/*
 	threadexits("ok");
 	c = chancreate(sizeof(ulong), buffer);
-	threadcreate(primethread, c, 1024);
+	threadcreate(primethread, (void*)0xcafebabe, 1024);
 	for(i=2;; i++)
 		sendul(c, i);
 	*/

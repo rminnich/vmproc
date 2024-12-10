@@ -374,6 +374,7 @@ waitproc(void *)
 
 	threadsetname("waitexit");
 	for(;;){
+		int i;
 		memset(buf, 0, sizeof(buf));
 		rc = read(waitfd, buf, sizeof(buf) - 1);
 		if(rc < 0)
@@ -381,6 +382,10 @@ waitproc(void *)
 		p = strchr(buf, '\n');
 		if(p != nil) *p = 0;
 		print("waitproc: %s\n", buf);
+			for(i = 0; i < 18; i++){
+				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
+			}
+
 		sendp(waitch, strdup(buf));
 	}
 }
@@ -424,6 +429,7 @@ runloop(void)
 	char *waitmsg;
 	ulong ul;
 	VmxNotif notif;
+	int i;
 
 	lock(&timerlock);
 	proccreate(waitproc, nil, 4096);
@@ -446,8 +452,11 @@ runloop(void)
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
-			print("%s\n", waitmsg);
+			print("WAIT:%s\n", waitmsg);
 			free(waitmsg);
+			for(i = 0; i < nelem(rcname); i++){
+				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
+			}
 			threadexits("vmthread exits");
 			break;
 		case SLEEP:
@@ -631,12 +640,32 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 int
 vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
 {
+	int i = 0x13;
 	//static u8int brdot[] = {0xeb, 0xfe};
 	//	memmove(vmbase, brdot, 2);
 	//rset(RPC, (uvlong)brdot); //(uvlong)vmbase);
+	// poison registers
+	if (1){
+	rset(RAX, (uvlong)i); i += 0x13;
+	rset(RBX, (uvlong)i); i += 0x13;
+	rset(RCX, (uvlong)i); i += 0x13;
+	rset(RDX, (uvlong)i); i += 0x13;
+	rset(RBP, (uvlong)i); i += 0x13;
+	rset(RSI, (uvlong)i); i += 0x13;
+	rset(RDI, (uvlong)i); i += 0x13;
+	rset(R8, (uvlong)i); i += 0x13;
+	rset(R9, (uvlong)i); i += 0x13;
+	rset(R10, (uvlong)i); i += 0x13;
+	rset(R11, (uvlong)i); i += 0x13;
+	rset(R12, (uvlong)i); i += 0x13;
+	rset(R13, (uvlong)i); i += 0x13;
+	rset(R14, (uvlong)i); i += 0x13;
+	rset(R15, (uvlong)i); i += 0x13;
+	}
+
 	rset(RPC, (uvlong)fn);
 	rset(RSP, (uvlong)vmbase + vmthreadmemsize);
-	rset(RARG, (uvlong)arg);
+	rset(RARG, (uvlong)arg+1); // RARG is right!
 	runloop();
 	return 0;
 }
