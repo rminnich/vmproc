@@ -39,7 +39,7 @@ pong(void *arg)
 	extern void *vmbase;
 	int p;
 
-	c = arg;
+	//c = arg;
 	c = (void *) 0x1000000;
 	while (1) {
 		p = recvul(c);
@@ -50,12 +50,16 @@ pong(void *arg)
 void
 setter(void *arg)
 {
+	extern void vmcall(uvlong, ...);
 	u8int *c;
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
-	uvlong poison;
-	for (int i = 0; i < 8; i++)
+	uvlong poison = 0;
+	vmcall(1);
+	for (int i = 0; i < 8; i++){
+		vmcall(2);
 		poison = poison<<8 | (uvlong)"POISON?!"[i];
+	}
 
 	c = arg;
 //	c = (void *) 5; // 0x1000000;
@@ -71,9 +75,9 @@ watcher(void *arg)
 	uvlong *c;
 
 	c = arg;
-	print("watcher: *c is %d\n", *c);
+	print("watcher: *c is %#llx\n", *c);
 	while (! *c){
-		print(".%d.", *c);
+		print(".%#llx.", *c);
 		sleep(1000);
 		yield();
 	}
@@ -164,7 +168,7 @@ threadmain(int argc, char **argv)
 			if (vmthreadcreate(primethread, c, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
-			for(i=2;; i++)
+			for(i=2;i<20; i++)
 				sendul(c, i);
 
 			print("ran primethread\n");

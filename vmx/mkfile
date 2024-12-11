@@ -33,6 +33,7 @@ OFILES=\
 	io.$O\
 	nanosec.$O\
 	x86.$O\
+	vmcall.$O\
 
 CFILES=\
 	386.c\
@@ -71,6 +72,9 @@ CFILES=\
 	nanosec.c\
 	x86.c\
 
+AFILES=\
+	vmcall.s\
+
 HFILES=\
 	/sys/include/thread.h\
 	threadimpl.h\
@@ -80,6 +84,7 @@ UPDATE=mkfile\
 	$HFILES\
 	$CFILES\
 	$SFILES\
+	$AFILES\
 
 all:V:	$LIB sched.$objtype.acid channel.$objtype.acid
 

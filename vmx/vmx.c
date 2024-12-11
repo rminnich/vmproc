@@ -435,6 +435,9 @@ runloop(void)
 	proccreate(waitproc, nil, 4096);
 	proccreate(sleeperproc, nil, 4096);
 	launch();
+			for(i = 0; i < 16; i++){
+				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
+			}
 	for(;;){
 		print("; %d;\n", *vmbase);
 		yield();
@@ -471,6 +474,9 @@ runloop(void)
 		}
 		if(getexit == 0 && state == VMRUNNING)
 			launch();
+			for(i = 0; i < 16; i++){
+				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
+			}
 	}
 }
 
@@ -664,7 +670,7 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
 	}
 
 	rset(RPC, (uvlong)fn);
-	rset(RSP, (uvlong)vmbase + vmthreadmemsize);
+	rset(RSP, (uvlong)vmbase + 0x100000);
 	rset(RARG, (uvlong)arg+1); // RARG is right!
 	runloop();
 	return 0;
