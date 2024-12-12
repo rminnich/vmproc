@@ -488,6 +488,7 @@ processexit(char *msg)
 	ExitInfo ei;
 	extern int getexit;
 
+	print("processexit: %s\n", msg);
 	strcpy(msgc, msg);
 	nf = tokenize(msgc, f, nelem(f));
 	if(nf < 2) sysfatal("invalid wait message: %s", msg);

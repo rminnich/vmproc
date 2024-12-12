@@ -382,6 +382,7 @@ waitproc(void *)
 		p = strchr(buf, '\n');
 		if(p != nil) *p = 0;
 		print("waitproc: %s\n", buf);
+		if (0)
 			for(i = 0; i < 18; i++){
 				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
 			}
@@ -429,18 +430,12 @@ runloop(void)
 	char *waitmsg;
 	ulong ul;
 	VmxNotif notif;
-	int i;
 
 	lock(&timerlock);
 	proccreate(waitproc, nil, 4096);
 	proccreate(sleeperproc, nil, 4096);
 	launch();
-			for(i = 0; i < 16; i++){
-				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
-			}
 	for(;;){
-		print("; %d;\n", *vmbase);
-		yield();
 		enum {
 			WAIT,
 			SLEEP,
@@ -455,28 +450,19 @@ runloop(void)
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
-			print("WAIT:%s\n", waitmsg);
+			processexit(waitmsg);
 			free(waitmsg);
-			for(i = 0; i < nelem(rcname); i++){
-				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
-			}
-			threadexits("vmthread exits");
 			break;
 		case SLEEP:
-			print("SLEEP fix me");
 			//pitadvance();
 			//rtcadvance();
 			break;
 		case NOTIF:
-			print("NOTIF\n");
 			notif.f(notif.arg);
 			break;
 		}
 		if(getexit == 0 && state == VMRUNNING)
 			launch();
-			for(i = 0; i < 16; i++){
-				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
-			}
 	}
 }
 
