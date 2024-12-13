@@ -59,7 +59,9 @@ setter(void *arg)
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
 	uvlong poison = 0;
-	vmcall((uvlong)vhell);
+	vmcall((uvlong)vhell, "hi");
+	vmcall((uvlong)vhell, "hi");
+	vmcall((uvlong)vhell, "hi");
 	for (int i = 0; i < 8; i++){
 		vmcall((uvlong)vhell);
 		poison = poison<<8 | (uvlong)"POISON?!"[i];

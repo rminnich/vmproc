@@ -462,8 +462,10 @@ static void
 dovmcall(ExitInfo *ei)
 {
 	void (*f)(void);
+	uvlong sp;
 	f = (void *)rget(RBP);
-	print("VMCALL %p %p %p\n", rget(RAX), rget(RDX), f);
+	sp = rget(RSP);
+	print("VMCALL %p %p %p sp %p *(8+sp) %p\n", rget(RAX), rget(RDX), f, sp, *(uvlong*)(sp+8));
 	f();
 	skipinstr(ei);
 }
