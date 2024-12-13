@@ -461,7 +461,10 @@ xsetbv(ExitInfo *ei)
 static void
 dovmcall(ExitInfo *ei)
 {
-	print("VMCALL %p %p\n", rget(RAX), rget(RDX));
+	void (*f)(void);
+	f = (void *)rget(RBP);
+	print("VMCALL %p %p %p\n", rget(RAX), rget(RDX), f);
+	f();
 	skipinstr(ei);
 }
 
