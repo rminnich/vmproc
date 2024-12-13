@@ -451,7 +451,7 @@ runloop(void)
 		case WAIT:
 			getexit--;
 			processexit(waitmsg);
-			free(waitmsg);
+			//free(waitmsg);
 			break;
 		case SLEEP:
 			//pitadvance();

@@ -9,42 +9,44 @@ Ron Minnich
 .sp
 rminnich@gmail.com
 .AB
-Virtualization is a capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
-VMs require a virtual machine manager, or VMM. 
-On modern operating systems, virtual machines (VMs) are supported by hardware, and  are managed by kernels, and presented to VMMs,
-as a device. 
-VMMs open a device, and operate on it as they would any other real device, such as a network card. This interface is difficult enough that,
-17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
-.LP
-On the Akaros operating system, we created a new model, vmthreads, in which VMs were created, and managed, as though they were just another thread. 
-This model provided a far more convenient abstraction for virtual machines: 
-it was no longer necessary to write VMMs; a VM was created and control as a thread in a multithreaded program.
+We describe a new Virtual Machine model for the Plan 9 kernel which allows Virtual Machines to be integrated into a 
+program as threads, making them far more convenient to use. Creating a Virtual Machine is as easy as creating a thread; the 
+function call is identical.
 .LP
 Adding a VM to a program is as easy as adding a thread; adding more cores just needs more threads.
 Creating and using a VMM is no more exotic than file I/O.
 .LP
-We discuss the implementation of this model on the 9front release of Plan 9. While the model is not quite as complete as the Akaros version, 
+We discuss the implementation of this model on the 9front release of Plan 9. 
+While the model is not quite as complete as the Akaros version, 
 we take advantage of the unique properties of Plan 9 to gain other advantages.
 .AE
 .SH
 Introduction
 .LP
+Virtualization is a capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
+VMs require a virtual machine manager, or VMM. 
 Virtualization, once limited to the exotic domain of IBM mainframes,  
 is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
 Chip vendors have made significant changes over the last 20 years to make virtualization efficient.
 A guest VM, as measured on cloud servers, can achieve aboout 91% of the throughput of running on host; 
 in some cases, it can even run faster.
 .LP
+On modern operating systems, virtual machines (VMs) are supported by hardware, and  are managed by kernels, and presented to VMMs,
+as a device. 
+VMMs open a device, and operate on it as they would any other real device, such as a network card. 
+.LP
 While virtualization is common, it is not easy to write code for. 
 The device model provided by most kernels (e.g. Linux) is tricky and easy to get wrong, with 
 difficult to understand failures. 
-It is also large :
-Virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
+This interface is difficult enough that,
+17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
+The API is also complex:
+virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
 Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
 .LP
 In this paper we introduce 
 .I VMThreads,
-a virtualization model which is incorporated into the Plan 9 thread library. 
+a virtualization model which we have incorporated into the Plan 9 thread library. 
 VMThreads, as the name implies, allows users to create and run VMs as a thread in a process.
 For example, this code starts an infinite loop as a VM thread, running in guest ring 0 on an x86.
 .P1
@@ -55,14 +57,15 @@ vmthreadcreate((void *)brdot, vmbase, 1024);
 The API is identical to the threadcreate API from libthread.
 .LP
 The rest of this paper is organized as follows: we provided an overview of virtualization; discuss
-the akaros vmthread virtualization model; discuss the implementation of this model in Plan 9
+the akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
 and then show examples of its use.
 .SH
 Virtualization
 .LP
 Virtualization allows privileged software to run in an unprivileged context, a.k.a., a guest, under control of a host. 
-Virtualization provides services required by applications, that might not be provided by the host (.e.g Linux running as a guest on OSX); 
+Virtualization provides services required by applications, 
+that might not be provided by the host (.e.g Linux running as a guest on OSX); 
 and a security boundary for the the host, protecting it from the guest. 
 Virtualization has been available since the 1960s on IBM mainframes. 
 .LP
@@ -73,7 +76,9 @@ including inexpensive laptops such as Chromebooks, up to and including the large
 .LP
 Once virtualization became more popular, users  wished for
 an alternative to proprietary virtualization 
-software. Xen was an early open source virtualization system for commodity x86 systems, and was widely deployed on Amazon Web Services. 
+software. 
+Xen was an early open source virtualization system for commodity x86 systems, 
+and was widely deployed on Amazon Web Services. 
 .LP
 Xen is a kernel which runs other kernels as a VM guest, i.e. "Domains", with one kernel ("Domain 0")
 being given special priveleges to perform IO, since Xen has no drivers
@@ -82,10 +87,11 @@ Xen is always the host, and kernels are always the guest. In Xen, every kernel r
 at a lower privilege level than the Xen kernel. 
 .LP
 Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used. 
+.FS
 There are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
-.LP
+.FE
 Unlike Xen, 
-KVM, VMWare, and other VMs run as a driver in a host kernel, usually Linux.
+KVM  VMs runs as a driver in Linux.
 In this model, a single general purpose host kernel is more 
 privileged than the virtual machine software, which in turn is more privileged than any VM guest. 
 The driver manages architectural features that enable and control virtualization. 
@@ -98,20 +104,25 @@ discussing a Type 2 VM.
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
 Virtual Machine Manager (VMM).
-The VMM is a program that operates on the VM to load, run, and manage a guest. As the guest VM runs, it will stop with error codes, interrupts,
-or by the guest itself requesting services;  which 
-must be managed by the VMM. 
-In some cases, the VMM can be called upon to emulate some instructions. 
+The VMM is a program that operates on the VM to load, run, and manage a guest. As the guest VM runs, 
+it will exit with error codes, interrupts,
+or when the guest requests services;  
+these VM exits are 
+managed by the VMM. 
+The VMM can be called upon to emulate some instructions; handle timer interrupts; or manage faults. 
+.LP
 VMMs can be very complex, and, consequently, can be very large. 
 We know of one proprietary VMM which is a 500 MiB binary; 
 at the same time, a basic VMM, written in C, can be as small as a megabyte. 
-Typically, samller VMMs can not handle the varying demands of guests; the larger VMM has support for more complicated operations. 
+Typically, smaller 
+VMMs can not handle widely varying demands of guests; the larger VMMs have support for more complicated operations, e.g., 
+BIOS interrupts needed for DOS.
 A common open source VMM is qemu, but there are many others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
 .LP
 With few exeptions, the VM API is built around a device model, frequently
 requiring special privilege to access. 
-Programs which 
-use the VM open the device and use a file descriptor to control it. 
+VMMs 
+open the VM device and use a file descriptor to control it. 
 The separateness of the device is always apparent. The abstraction
 is complicated and not convenient.
 .SH
@@ -122,8 +133,8 @@ April 1, 2015 and on (yes, April Fool's day!).
 .FE
 .LP
 As part of our Akaros research at Google, we developed an entirely
-new VM model, by adding a new program protection level we called Ring V.
-Ring V is identical to the X86 Ring 3, a.k.a user mode, save that it is a VM.
+new VM model, by adding a new program protection level called Ring V.
+Ring V is almost identical to the X86 Ring 3, a.k.a user mode, save that it is a VM.
 When the Akaros kernel exits Ring 0 (kernel) to the program, it
 checks a flag in
 the process structure and either does
@@ -133,8 +144,10 @@ Akaros can decide, each time it resumes a process, whether to resume it in Ring 
 Processes can flip back and forth between the two modes at will. 
 .LP
 Akaros takes the model one step further: the guest physical address space is the same as process virtual address space. 
-A VMM can start a kernel by starting a vmthread with the kernel entry point as the initial program counter (PC). 
-VMMs can even run user programs in Guest Ring 0, i.e. as kernels. One use of a Guest Ring 0 program would be a device driver, which could safely
+A VMM can start a kernel by reading the kernel file into memory and 
+starting a vmthread with the kernel entry point as the initial program counter (PC). 
+VMMs can even run user programs in Guest Ring 0, i.e. as kernels. 
+One use of a Guest Ring 0 program would be a device driver, which could safely
 contain the device I/O in the VM. 
 .LP
 How do VMThreads look in practice? 
@@ -213,8 +226,9 @@ of the return address (tf_rip).
 .FE
 .LP
 Finally, we can show the VMM itself. This examples runs 5 VMs simultaneously, i.e. on 5 cores.
-This is a multi-threaded program running several VMs on several cores at once. This is the
-technique we use to start an SMP kernel such as Linux.
+This is a multi-threaded program running several VMs on several cores at once. 
+It is the
+technique we use to start an SMP kernel such as Linux: each Linux core (VM guest) is a thread in the host.
 .P1
 int main(int argc, char **argv)
 {
@@ -267,17 +281,23 @@ are hard to get right. With VM programming on x86 processors, one symptom of inc
 is a very fast reset/reboot. Further, they do add complexity to the kernel.
 .LP
 Second is the code to implement host process virtual and guest physical identity mapping.
-In Akaros, this is achieved by having every host page table page paired with a guest page table page -- i.e., every page table page is now 8k, not 4k. 
+In Akaros, this is achieved by having every host page table page paired with a guest page table page -- 
+i.e., every page table page is now 8k, not 4k. 
+.FS
 People tend to worry when they hear this, but the actual impact is quite minor: 
 on an 8 GiB machine the memory for page table pages increases by 16 MiB. 
-We have implemented this change, with a boot time command line argument. I.e., it does
+.FE
+On 9front, we have implemented this "double page table page" change, and
+whether it is used is controlled with a boot time command line argument. I.e., "double page page tables" do
 not require recompiling the kernel.
 .FS
 Code avaliable at shithub.us.
 .FE
 .LP
-Nevertheless, before making such far reaching changes, we decided to take a less
-impactful approach, levering the way that Plan 9 threads and the 9front vmx device work.
+Although we have part of the Akaros model working, 
+before making more far reaching changes, we decided to take a less
+impactful approach, leveraging the way that Plan 9 threads and the 9front vmx device work.
+Before describing our implementation, we will review Plan 9 threading and the 9front VMX device.
 .SH 
 A quick review of Plan 9 libthread
 .LP
@@ -305,18 +325,22 @@ The top level directory contains a clone file and numbered
 subdirectories representing the allocated virtual CPUs.
 .P2
 .LP
-The device presents VMs as files:
+The device is available in #X. Initially, only a file named clone appears. As VMs are created, 
+numbered directories appear with control files:
 .P1
-          #X/clone
-          #X/n
-          #X/n/ctl
-          #X/n/fpregs
-          #X/n/map
-          #X/n/regs
-          #X/n/status
-          #X/n/wait
+'#X/0'
+'#X/clone'
+'#X/0/ctl'
+'#X/0/fpregs'
+'#X/0/map'
+'#X/0/regs'
+'#X/0/status'
+'#X/0/wait'
+'#X/clone'
 .P2
- Control of VMs is via commands written to the ctl file. 
+.LP
+Control of VMs is via commands written to the ctl file. 
+For further information, see the man page on 9front.
 .LP 
 In the next section, we describe how we implement VMThreads with libthread and devvmx.
 .SH
@@ -328,7 +352,7 @@ All that it means is that a guest physical address and a host virtual address po
 hosts and guests can communicate pointers to each other without having to translate 
 them.
 .LP
-We have not imlemented ID mapping for guest to host. However, most of the effect can be obtained, as 
+We have not implemented complete ID mapping for guest to host. Most of the effect can be obtained, as 
 the 9front vmx command does, by using segattach. The VMM creates a global segment, then directs the VM instance, 
 via the  ctl file, to use that segment for part of its memory. The result is that the
 VMM and the VM are using a common memory segment. 
@@ -338,7 +362,7 @@ It creates another segment for the low 16 MiB of memory.
 This is enough to allow 1 MiB for low guest physical memory; 1 MiB for the
 shared frame buffer, and a large shared ID area for the guest and host.
 Host software can not use the memory range from 0 to 2 MiB, but the guest can use physical memory from 0 to 
-2 MiB, so this works fine.
+2 MiB.
 The memory from 2 MiB to 16 MiB is copied, not shared, between host and guest. Any new guest code, such
 as a kernel,  must
 be loaded at 16 MiB, and be able to function with a 15 MiB hole starting at 1 MiB. 
@@ -356,19 +380,47 @@ To have 9front boot at 16 MiB requires a 3-line change to the kernel mkfile:
 .P2
 .FE
 .LP
-The result is that a large fraction of the memory is shared between guest and host: starting at the 16 MiB boundary, and up to the size of the VM, all memory is shared
+The result is that a large fraction of the memory is shared between guest and host: 
+starting at the 16 MiB boundary, and up to the size of the VM, all memory is shared
 and all pointers are interchangeable. This is particularly useful for virtio, since
-that uses ring buffers to pass pointers.
+it uses ring buffers to pass pointers.
 Process stack is not accessible from the guest. The guest has a copy of the host text,
 data, and BSS at the time of process creation, but that is not shared.
 .LP
 Limiting the programs to low 16 MiB might seem to be a problem. 
-For non-Plan 9 systems, fitting a full VMM in 14 MiB would be very difficult. Plan 9 programs
-tend to be compact. The 
+For non-Plan 9 systems, fitting a full VMM in 14 MiB would be very difficult. 
+But Plan 9 programs
+tend to be compact, and the ABI of the #X device helps:
+the 
 9front VMM, called vmx, is only 512 KiB, which is anywhere from 10 to 100 times smaller
-than many Linux VMMs. 14 MiB is more than enough. 
+than many Linux VMMs. 14 MiB is more than enough for the foreseeable future.
 However, should the day come when more is needed, it is easy enough to load the kernel at a much
 higher address. The decision on where to split the shared and unshared memory is easy to change.
+In this example, the addresses from 0 to 6MiB are shared in in the process virtual and guest physical.
+.PS
+P:box "process virtual" wid 1.2i
+S:box "devsegment" wid 1.2i with .w at last box.e + (1,0)
+G:box "guest physical" wid 1.2i with .w at last box.e + (1,0)
+
+box "0-2MiB" ht .2i wid 1.2i with .n at P.s + (0,-.2i)
+box "2MiB-16MiB" ht .6i wid 1.2i with .n at last box.s
+
+P: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
+Q:box "80MiB-96MiB" ht .8i wid 1.2i with .n at last box.s
+
+S: box "0-64MiB" ht 1.2i wid 1.2i with .n at S.s + (0,-.2i)
+T: box "64MiB-80MiB" ht .8i wid 1.2i with .n at last box.s
+
+G: box "0-16MiB" ht .8i wid 1.2i with .n at G.s + (0,-.2i)
+H: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
+
+line from P.ne to H.nw
+arrow from P.e to S.w
+arrow from Q.e to T.w
+
+arrow from S.e to H.w
+arrow from T.e to G.w
+.PE
 .SH
 Code
 .LP
@@ -389,8 +441,77 @@ VMThreads functions test whether vmthreadinit has been called and will return wi
 Vmthreadcreate is called with pointer to brdot, which is the 2-byte infinite loop for x86.
 This shows the ease with which both a VMM and a guest VM can be set up in the same program.
 The VM is run by a VMM function, runloop, which starts the VM and calls yield(), allowing other threads to run while the VM runs.
-
-
+.SH
+Using vmcall
+.LP
+VMcall allows guests to call funtions in the host. 
+In the Akaros example, this was laborious: one needed to create a function, with case statements as to the
+call number.
+.LP
+In practice, because the address space is shared, this can be far simpler: the first parameter to the vmcall
+can be a function pointer.
+We need only add the vmcall instruction handling to the vmx exit handler in exith.c.
+.P1
+static void
+dovmcall(ExitInfo *ei)
+{
+	void (*f)(void);
+	uvlong *sp;
+	f = (void *)rget(RBP);
+	sp = (void *)rget(RSP);
+	f(sp[1], sp[2], sp[3], sp[4]);
+	skipinstr(ei);
+}
+.P2
+The it is just a matter of calling the vmcall instruction in the guest.
+We show an example below.
+.LP
+The vmcall is an assembly stub:
+.P1
+TEXT vmcall(SB), $0
+	BYTE $0xf; BYTE $0x1; BYTE $0xc1
+	RET
+.P2
+The function itself is:
+.P1
+void vmcall(uvlong, ...);
+.P2
+The stub need do no argument setup; the compiler does that as part of normal function calling.
+.LP
+We can define a simple function to be called from the vmcall:
+.P1
+void vhello(void){
+	print("hello\n");
+}
+.P2
+The vmthread then becomes:
+.P1
+void
+setter(void *arg)
+{
+	vmcall((uvlong)vhello);
+}
+.P2 
+.LP
+The threadcreate is, therefore:
+.P1
+.P2
+vmthreadcreate(setter, nil, 1024);
+.LP
+Shared memory can provide a new way to implement drivers. A kernel
+can be provided a set of functions to use to call IO functions. A kernel can hence
+be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
+function in memory.
+.SH
+Conclusions and future work
+.LP
+We have described vmthreads, an extension to the 9front libthread, which allows guest virtual machines to run 
+as a thread. VMs share memory, and can call host functions directly.
+The current implementation provides most of the capability we had on Akaros: readonly code is shared, but the data and bss
+are copied, not shared. Stack is never shared. 
+.LP
+Future work includes exploring the model in its current state, to see how it might be used; and, going one step further
+and enabling full sharing of the data and bss segments.
 .SH
 References
 .LP

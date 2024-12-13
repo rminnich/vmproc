@@ -47,8 +47,9 @@ pong(void *arg)
 	}
 }
 
-void vhell(void){
-	print("hi from vmcall!\n");
+void vhello(void){
+	char hi[] = "hi from vmcall!\n"; 
+	write(1,  hi, sizeof(hi)-1);
 }
 
 void
@@ -59,9 +60,9 @@ setter(void *arg)
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
 	uvlong poison = 0xcafebabe;
-	vmcall((uvlong)vhell, "hi", arg);
-	vmcall((uvlong)vhell, "hi");
-	vmcall((uvlong)vhell, "hi");
+	vmcall((uvlong)vhello, "hi", arg);
+	vmcall((uvlong)vhello, "hi");
+	vmcall((uvlong)vhello, "hi");
 	for(p = (void *)/*vmbase*/0x1000000; p < (void *)/*vmend*/0x4000000; p++)
 		*p = poison;
 	for (int i = 0; i < 8; i++){
@@ -88,6 +89,8 @@ watcher(void *arg)
 		sleep(1000);
 		yield();
 	}
+	write(1, "WX\n", 3);
+	threadexits(nil);
 }
 
 void
