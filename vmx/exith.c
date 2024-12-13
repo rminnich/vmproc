@@ -458,6 +458,13 @@ xsetbv(ExitInfo *ei)
 	}
 }
 
+static void
+dovmcall(ExitInfo *ei)
+{
+	print("VMCALL %p %p\n", rget(RAX), rget(RDX));
+	skipinstr(ei);
+}
+
 typedef struct ExitType ExitType;
 struct ExitType {
 	char *name;
@@ -475,6 +482,7 @@ static ExitType etypes[] = {
 	{"#db", dbgexc},
 	{"movcr", movcr},
 	{".xsetbv", xsetbv},
+	{".vmcall", dovmcall},
 };
 
 void

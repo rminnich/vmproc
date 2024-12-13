@@ -47,6 +47,10 @@ pong(void *arg)
 	}
 }
 
+void vhell(void){
+	print("hi from vmcall!\n");
+}
+
 void
 setter(void *arg)
 {
@@ -55,9 +59,9 @@ setter(void *arg)
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
 	uvlong poison = 0;
-	vmcall(1);
+	vmcall((uvlong)vhell);
 	for (int i = 0; i < 8; i++){
-		vmcall(2);
+		vmcall((uvlong)vhell);
 		poison = poison<<8 | (uvlong)"POISON?!"[i];
 	}
 
