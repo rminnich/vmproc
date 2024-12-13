@@ -591,15 +591,15 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	vmthreadmemsize = highmemsize;
-	vmbase = (void *)lowmemsize;
+	vmbase = (void *)0x1000000;
 	vmend = vmbase + lowmemsize;
 	sz = lowmemsize + highmemsize;
 	vmxsetup();
 	// now allocate it for realz.
-	snprint(sn, sizeof(sn), "sn.%p.%p", (uvlong)vmbase,sz);
+	snprint(sn, sizeof(sn), "sn.%d", getpid());
 	gmem = segattach(0, sn, vmbase, sz);
 	if(gmem == (void*)-1){
-		snprint(buf, sizeof(buf), "#g/sn.%p.%p", vmbase,sz);
+		snprint(buf, sizeof(buf), "#g/%s", sn);
 		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
 		if(fd < 0) sysfatal("create: %r");
 		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
@@ -618,11 +618,12 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	} 
 		memset(gmem, 0, sz);
 
-
+	print("mkregion %p %p %p %p \n", vmbase, 0, vmbase, vmthreadmemsize);
 	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
 	print("region %p->%p\n", r->v, r->ve);
+	print("mkregion %p %p %p %p \n", r->ve, highmemsize, (uvlong)0x200000, lowmemsize);
 	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);

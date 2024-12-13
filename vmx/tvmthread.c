@@ -58,10 +58,12 @@ setter(void *arg)
 	u8int *c;
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
-	uvlong poison = 0;
+	uvlong poison = 0xcafebabe;
+	vmcall((uvlong)vhell, "hi", arg);
 	vmcall((uvlong)vhell, "hi");
 	vmcall((uvlong)vhell, "hi");
-	vmcall((uvlong)vhell, "hi");
+	for(p = (void *)/*vmbase*/0x1000000; p < (void *)/*vmend*/0x4000000; p++)
+		*p = poison;
 	for (int i = 0; i < 8; i++){
 		vmcall((uvlong)vhell);
 		poison = poison<<8 | (uvlong)"POISON?!"[i];
@@ -70,8 +72,7 @@ setter(void *arg)
 	c = arg;
 //	c = (void *) 5; // 0x1000000;
 //	c = vmbase;
-	for(p = (void *)/*vmbase*/0x1000000; p < (void *)vmend; p++)
-		*p = poison;
+	c += 0x666;
 	while (1) {	*c = 1;}
 }
 
@@ -118,7 +119,7 @@ threadmain(int argc, char **argv)
 		goal = 100;
 
 	void vmthreadinit(uvlong lowmemsize, uvlong highmemsize);
-	vmthreadinit(16*1024*1024, 64*1024*1024);
+	vmthreadinit(14*1024*1024, 64*1024*1024);
 
 	switch (test) {
 		default:
