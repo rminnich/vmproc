@@ -11,14 +11,12 @@ rminnich@gmail.com
 .AB
 We describe a new Virtual Machine model for the Plan 9 kernel which allows Virtual Machines to be integrated into a 
 program as threads, making them far more convenient to use. Creating a Virtual Machine is as easy as creating a thread; the 
-function call is identical.
-.LP
-Adding a VM to a program is as easy as adding a thread; adding more cores just needs more threads.
-Creating and using a VMM is no more exotic than file I/O.
+function call is identical. We first implemented this model in the Akaros research kernel, and
+showed that it could support the Google production kernel stack as a guest.
 .LP
 We discuss the implementation of this model on the 9front release of Plan 9. 
-While the model is not quite as complete as the Akaros version, 
-we take advantage of the unique properties of Plan 9 to gain other advantages.
+While the implementation is not quite as complete as the Akaros version, 
+we take advantage of the unique properties of Plan 9 to gain other advantages. 
 .AE
 .SH
 Introduction
@@ -400,7 +398,7 @@ In this example, the addresses from 0 to 6MiB are shared in in the process virtu
 .PS
 P:box "process virtual" wid 1.2i
 S:box "devsegment" wid 1.2i with .w at last box.e + (1,0)
-G:box "guest physical" wid 1.2i with .w at last box.e + (1,0)
+G:box "guest physical" wid 1.2i with .w at P.e + (4,0)
 
 box "0-2MiB" ht .2i wid 1.2i with .n at P.s + (0,-.2i)
 box "2MiB-16MiB" ht .6i wid 1.2i with .n at last box.s
@@ -408,13 +406,13 @@ box "2MiB-16MiB" ht .6i wid 1.2i with .n at last box.s
 P: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
 Q:box "80MiB-96MiB" ht .8i wid 1.2i with .n at last box.s
 
-S: box "0-64MiB" ht 1.2i wid 1.2i with .n at S.s + (0,-.2i)
+S: box "0-64MiB" ht 1.2i wid 1.2i with .n at S.s + (0,-1.2i)
 T: box "64MiB-80MiB" ht .8i wid 1.2i with .n at last box.s
 
 G: box "0-16MiB" ht .8i wid 1.2i with .n at G.s + (0,-.2i)
 H: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
 
-line from P.ne to H.nw
+line dashed "common guest/process 64MiB area based at 16 MiB" from P.ne to H.nw
 arrow from P.e to S.w
 arrow from Q.e to T.w
 
