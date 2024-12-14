@@ -10,13 +10,15 @@ Ron Minnich
 rminnich@gmail.com
 .AB
 We describe a new Virtual Machine model, VMThreads, for Plan 9, which allows Virtual Machines to be integrated into a 
-program as threads, 
-making them far more convenient to use. 
+program as threads.
 Creating a Virtual Machine is as easy as creating a thread; the 
-function call signature is identical. 
+function call signature is identical to 
+.I threadcreate(2).
 Currently,
 VMThreads requires no kernel changes.
-We first implemented this model in the Akaros research kernel, and
+.LP
+While the VMs as threads model is very simple, it is as capable as more complex systems:
+we first implemented VMThreads in the Akaros research kernel, and
 showed that it could support the Google production kernel stack as a guest. 
 .LP
 We discuss the implementation of this model on the 9front release of Plan 9. 
@@ -26,7 +28,7 @@ it requires no kernel changes.
 .SH
 Introduction
 .LP
-Virtualization is a capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
+Virtualization is a hardware capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
 VMs do not stand alone; they require a virtual machine manager, or VMM, to start them, 
 provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
@@ -54,14 +56,14 @@ a virtualization model which we have incorporated into the Plan 9 thread library
 VMThreads, as the name implies, allows users to create and run VMs as a thread in a process.
 For example, this code starts an infinite loop as a VM thread, running in guest ring 0 on an x86.
 .P1
-extern void *vmbase;
-static u8int brdot[] = {0xeb, 0xfe}; // 1: jmp 1b
-vmthreadcreate((void *)brdot, vmbase, 1024);
+u8int brdot[] = {0xeb, 0xfe}; // infinite loop: 1: jmp 1b
+// start vmthread at brdot; no argument; 1024 byte stack.
+vmthreadcreate((void *)brdot, nil, 1024); 
 .P2
 The API is identical to the threadcreate API from libthread.
 .LP
 The rest of this paper is organized as follows: we provided an overview of virtualization; discuss
-the akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
+the Akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
 and then show examples of its use.
 .SH
@@ -108,7 +110,8 @@ discussing a Type 2 VM.
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
 Virtual Machine Manager (VMM).
-The VMM is a program that operates on the VM to load, run, and manage a guest. As the guest VM runs, 
+The VMM is a program that directs the kernel to
+load, run, and manage a guest. As the guest VM runs, 
 it will exit with error codes, interrupts,
 or when the guest requests services;  
 these VM exits are 
@@ -117,7 +120,7 @@ The VMM can be called upon to emulate some instructions; handle timer interrupts
 .LP
 VMMs can be very complex, and, consequently, can be very large. 
 We know of one proprietary VMM which is a 500 MiB binary; 
-at the same time, a basic VMM, written in C, can be as small as a megabyte. 
+at the same time, a basic Linux VMM, written in C, can be as small as a megabyte. 
 Typically, smaller 
 VMMs can not handle widely varying demands of guests; the larger VMMs have support for more complicated operations, e.g., 
 BIOS interrupts needed for DOS.
@@ -214,8 +217,9 @@ out_ok:
  * a custom vmcall handler, and initialize the
  * mutex (.mtx) structure member.
  */
-static struct virtual_machine vm = {.vmcall = extended_handle_vmcall,
-                                    .mtx = UTH_MUTEX_INIT};
+static struct virtual_machine 
+vm = {.vmcall = extended_handle_vmcall,
+      .mtx = UTH_MUTEX_INIT};
 .P2
 There is an enum, which defines several test vmcalls; and a function, 
 extended_handle_vmcall, which implements the vmcall itself. 
@@ -342,15 +346,15 @@ VM has been created. Unlike PIDs, the VM numbers are not reused;
 as new VMs are created, the number
 continues to increase. 
 .P1
-'#X/0'
-'#X/clone'
-'#X/0/ctl'
-'#X/0/fpregs'
-'#X/0/map'
-'#X/0/regs'
-'#X/0/status'
-'#X/0/wait'
-'#X/clone'
+ '#X/0'
+ '#X/clone'
+ '#X/0/ctl'
+ '#X/0/fpregs'
+ '#X/0/map'
+ '#X/0/regs'
+ '#X/0/status'
+ '#X/0/wait'
+ '#X/clone'
 .P2
 .LP
 Control of VMs is via commands written to the ctl file. Registers are available
@@ -366,9 +370,11 @@ VMThreads on 9front
 As mentioned, on Akaros, 
 the guest physical address space is mapped 1:1 with the process virtual address space.
 On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (EPT) and the host mappings (KPT) all point to the same memory. To keep it shorter, we will call this ID, meaning Identity mapped host virtual and guest physical memory. 
-All that it means is that a guest physical address and a host virtual address point to the same thing; 
+All that it means is that a guest physical address and a host virtual address point to the same memory; 
 hosts and guests can communicate pointers to each other without having to translate 
 them.
+In the examples we present below, process virtual memory addresses 0x1000000-0x5000000 correspond to guest physical addresses 0x1000000-0x5000000. A physical guest address in this range points to the same
+memory as the process virtual address.
 .LP
 We have not implemented complete ID mapping for guest to host. Most of the effect can be obtained, as 
 the 9front vmx command does, by using segattach. The VMM creates a global segment, then directs the VM instance, 
@@ -410,7 +416,7 @@ starting at the 16 MiB boundary, and up to the size of the VM, all memory is sha
 and all pointers are interchangeable. This is particularly useful for virtio, since
 it uses ring buffers to pass pointers.
 Process stack is not accessible from the guest. The guest has a copy of the host text,
-data, and BSS at the time of process creation, but that is not shared.
+data, and BSS at the time of vmthread creation, but that is not shared.
 .LP
 Limiting the programs to low 16 MiB might seem to be a problem. 
 For non-Plan 9 systems, fitting a full VMM in 14 MiB would be very difficult. 
@@ -456,7 +462,7 @@ The first example shows an infinite loop.
 	vmthreadinit(16*1024*1024, 64*1024*1024);
 	static u8int brdot[] = {0xeb, 0xfe};
 
-	if (vmthreadcreate(brdot, (void *)0x1000000, 1024) < 0) {
+	if (vmthreadcreate(brdot, nil, 1024) < 0) {
 		exits("vmthreadcreate failed");
 	}
 .P2
@@ -475,7 +481,8 @@ call number.
 .LP
 In practice, because the address space is shared, this can be far simpler: the first parameter to the vmcall
 can be a function pointer.
-We need only add the vmcall instruction handling to the vmx exit handler in exith.c.
+We need only add the vmcall instruction handling to the vmx exit handler in exith.c, which we have 
+copied from the vmx command to libthread. 
 .P1
 static void
 dovmcall(ExitInfo *ei)
@@ -488,16 +495,27 @@ dovmcall(ExitInfo *ei)
 	skipinstr(ei);
 }
 .P2
-The it is just a matter of calling the vmcall instruction in the guest.
+And add that function to the set of instructions handled in vmexit:
+.P1
+static ExitType etypes[] = {
+	{"io", iohandler},
+	{".cpuid", cpuid},
+...
+	{".xsetbv", xsetbv},
++	{".vmcall", dovmcall},
+};
+.P2
+.LP
+Then it is just a matter of calling the vmcall instruction in the guest.
 We show an example below.
 .LP
-The vmcall is an assembly stub:
+First, the library provides a vmcall an assembly stub:
 .P1
 TEXT vmcall(SB), $0
 	BYTE $0xf; BYTE $0x1; BYTE $0xc1
 	RET
 .P2
-The function itself is:
+The function itself is declared in C as taking varargs:
 .P1
 void vmcall(uvlong, ...);
 .P2
@@ -511,6 +529,7 @@ void vhello(void){
 .P2
 The vmthread then becomes:
 .P1
+// Guest code
 void
 setter(void *arg)
 {
@@ -523,20 +542,25 @@ The threadcreate is, therefore:
 .P2
 vmthreadcreate(setter, nil, 1024);
 .LP
-Shared memory can provide a new way to implement drivers. A kernel
-can be provided a set of functions to use to call IO functions. A kernel can hence
+The VMThread is ablel to call, via a vmcall, a function in the host.
+.LP
+When VMThreads is being used to run a kernel, 
+the common shared memory can provide a new way to implement drivers. A kernel
+can be provided with a set of functions to use to call IO functions. A kernel can hence
 be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
 function in memory.
 .SH
 Conclusions and future work
 .LP
 We have described vmthreads, an extension to the 9front libthread, which allows guest virtual machines to run 
-as a thread. VMs share memory, and can call host functions directly.
-The current implementation provides most of the capability we had on Akaros: readonly code is shared, but the data and bss
-are copied, not shared. Stack is never shared. 
+as a thread. VMs share memory, and can call host functions directly via vmcall.
+The current implementation provides most of the capability we had on Akaros: a large memory
+area is shared, but the code, data and bss segmeents
+are copied, not shared. Stack is never shared or copied. 
 .LP
 Future work includes exploring the model in its current state, to see how it might be used; and, going one step further
 and enabling full sharing of the data and bss segments.
+Finally, since the Go threading model derives directly from Plan 9, we will create a vmthreads package for Go.
 .SH
 References
 .LP
