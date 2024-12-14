@@ -18,6 +18,9 @@ NAMES=$FILES $DIRS
 
 all:V: vmthread.pdf
 
+view: all
+	plumb vmthread.pdf
+
 # all:V: ${FILES:%=%.ps} dirs
 
 dirs:V:

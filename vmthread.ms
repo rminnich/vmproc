@@ -9,27 +9,33 @@ Ron Minnich
 .sp
 rminnich@gmail.com
 .AB
-We describe a new Virtual Machine model for the Plan 9 kernel which allows Virtual Machines to be integrated into a 
-program as threads, making them far more convenient to use. Creating a Virtual Machine is as easy as creating a thread; the 
-function call is identical. We first implemented this model in the Akaros research kernel, and
-showed that it could support the Google production kernel stack as a guest.
+We describe a new Virtual Machine model, VMThreads, for Plan 9, which allows Virtual Machines to be integrated into a 
+program as threads, 
+making them far more convenient to use. 
+Creating a Virtual Machine is as easy as creating a thread; the 
+function call signature is identical. 
+Currently,
+VMThreads requires no kernel changes.
+We first implemented this model in the Akaros research kernel, and
+showed that it could support the Google production kernel stack as a guest. 
 .LP
 We discuss the implementation of this model on the 9front release of Plan 9. 
 While the implementation is not quite as complete as the Akaros version, 
-we take advantage of the unique properties of Plan 9 to gain other advantages. 
+it requires no kernel changes. 
 .AE
 .SH
 Introduction
 .LP
 Virtualization is a capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
-VMs require a virtual machine manager, or VMM. 
+VMs do not stand alone; they require a virtual machine manager, or VMM, to start them, 
+provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
 is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
 Chip vendors have made significant changes over the last 20 years to make virtualization efficient.
 A guest VM, as measured on cloud servers, can achieve aboout 91% of the throughput of running on host; 
 in some cases, it can even run faster.
 .LP
-On modern operating systems, virtual machines (VMs) are supported by hardware, and  are managed by kernels, and presented to VMMs,
+On almost all modern operating systems, virtual machines (VMs) are supported by hardware,  with low level control provided  by kernels, and presented to VMMs,
 as a device. 
 VMMs open a device, and operate on it as they would any other real device, such as a network card. 
 .LP
@@ -262,8 +268,7 @@ exits with VTH_VMCALL_EXIT, will complete the join.
 .LP
 This API is designed to be familiar to pthreads users. There is
 one compilation unit; all data and code share an address space; 
-it uses a fork/join model. The only difference, not really visible
-at first, is that all the threads run in a VM.
+it uses a fork/join model. The only difference is that all the threads run in a VM.
 Threads can call host functions with the vmcall. Interestingly enough, 
 since the address space is shared, threads can call libc functions to format
 strings, and then print them with the vmcall.
@@ -276,7 +281,7 @@ The first is the implementation of Ring V. Processes need to record which
 ring they are returning to; they need to store extra state for Ring V (about 8k); and
 they need the additional assembly support. These changes are not large, but they
 are hard to get right. With VM programming on x86 processors, one symptom of incorrect setup
-is a very fast reset/reboot. Further, they do add complexity to the kernel.
+is a very fast reset/reboot. Further, they add complexity to the kernel.
 .LP
 Second is the code to implement host process virtual and guest physical identity mapping.
 In Akaros, this is achieved by having every host page table page paired with a guest page table page -- 
@@ -309,6 +314,13 @@ In libthread,
 a single thread in the same process is created by 
 .CW threadcreate.
 We follow this naming convention: VMThreads are created with vmthreadcreate.
+.LP
+Threads communicate with channels. A channel is an in-memory pipe which transmits
+basic scalar types such as bytes, ints, and pointers. When a thread sends on a 
+channel, it can be descheduled and another thread can run. Threads can also voluntarily
+yield the processor with a yield() function.
+.LP
+For more information on Plan 9 threading, please see the documentation.
 .SH
 9front vmx device
 .LP
@@ -323,8 +335,12 @@ The top level directory contains a clone file and numbered
 subdirectories representing the allocated virtual CPUs.
 .P2
 .LP
-The device is available in #X. Initially, only a file named clone appears. As VMs are created, 
-numbered directories appear with control files:
+The device is available in #X. Initially, only a file named clone appears. 
+As VMs are created, 
+numbered directories appear with control files, as in this example, where the first
+VM has been created. Unlike PIDs, the VM numbers are not reused; 
+as new VMs are created, the number
+continues to increase. 
 .P1
 '#X/0'
 '#X/clone'
@@ -337,14 +353,18 @@ numbered directories appear with control files:
 '#X/clone'
 .P2
 .LP
-Control of VMs is via commands written to the ctl file. 
+Control of VMs is via commands written to the ctl file. Registers are available
+from the fpregs and regs files. The map file shows how guest physical memory is mapped
+to the segment device. Status shows the VM status. Wait can be opened and read;
+the read call returns when the VM guest status changes (usually via a VMEXIT).
 For further information, see the man page on 9front.
 .LP 
 In the next section, we describe how we implement VMThreads with libthread and devvmx.
 .SH
 VMThreads on 9front
 .LP
-As mentioned, on Akaros, the guest physical address space is mapped 1:1 with the process virtual address space.
+As mentioned, on Akaros, 
+the guest physical address space is mapped 1:1 with the process virtual address space.
 On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (EPT) and the host mappings (KPT) all point to the same memory. To keep it shorter, we will call this ID, meaning Identity mapped host virtual and guest physical memory. 
 All that it means is that a guest physical address and a host virtual address point to the same thing; 
 hosts and guests can communicate pointers to each other without having to translate 
@@ -355,8 +375,15 @@ the 9front vmx command does, by using segattach. The VMM creates a global segmen
 via the  ctl file, to use that segment for part of its memory. The result is that the
 VMM and the VM are using a common memory segment. 
 .LP
-Vmthreadcreate maps a large middle data area via segattach, and maps it at 0x1000000 (16 MiB). 
-It creates another segment for the low 16 MiB of memory.
+Vmthreadcreate maps a data area via segattach, and maps two segments from it
+as directed by an init function, vmthreadinit. This function takes two parameters: 
+the size of the low, unshared memory; and the size of a high range of shared memory.
+It creates another segment for the low range of memory.
+.LP
+In the examples presented, the user calls vmthreadinit as follows:
+.P1
+vmthreadinit(14*1024*1024, 64*1024*1024);
+.P2
 This is enough to allow 1 MiB for low guest physical memory; 1 MiB for the
 shared frame buffer, and a large shared ID area for the guest and host.
 Host software can not use the memory range from 0 to 2 MiB, but the guest can use physical memory from 0 to 
@@ -393,8 +420,8 @@ the
 9front VMM, called vmx, is only 512 KiB, which is anywhere from 10 to 100 times smaller
 than many Linux VMMs. 14 MiB is more than enough for the foreseeable future.
 However, should the day come when more is needed, it is easy enough to load the kernel at a much
-higher address. The decision on where to split the shared and unshared memory is easy to change.
-In this example, the addresses from 0 to 6MiB are shared in in the process virtual and guest physical.
+higher address, by adjusting the parameters to vmthreadinit. The decision on where to split the shared and unshared memory is easy to change.
+In this example, the addresses from 16MiB to 80MiB are shared in in the process virtual and guest physical.
 .PS
 P:box "process virtual" wid 1.2i
 S:box "devsegment" wid 1.2i with .w at last box.e + (1,0)
@@ -479,7 +506,7 @@ The stub need do no argument setup; the compiler does that as part of normal fun
 We can define a simple function to be called from the vmcall:
 .P1
 void vhello(void){
-	print("hello\n");
+	print("hello\\n");
 }
 .P2
 The vmthread then becomes:
