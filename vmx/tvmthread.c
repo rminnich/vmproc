@@ -39,17 +39,21 @@ pong(void *arg)
 	extern void *vmbase;
 	int p;
 
-	//c = arg;
-	c = (void *) 0x1000000;
+	c = arg;
+	//c = (void *) 0x1000000;
 	while (1) {
 		p = recvul(c);
 		sendul(c, p+1);
 	}
 }
 
-void vhello(void){
+void vhello(void *a1, void *a2, void *a3, void *a4)
+{
 	char hi[] = "hi from vmcall!\n"; 
 	write(1,  hi, sizeof(hi)-1);
+	print("arg is %p %p %p %p\n", a1, a2, a3, a4);
+	// not yet ...print((char*)a1, a2, a3, a4);
+
 }
 
 void
@@ -60,13 +64,13 @@ setter(void *arg)
 	extern u8int *vmbase, *vmend;
 	uvlong *p;
 	uvlong poison = 0xcafebabe;
-	vmcall((uvlong)vhello, "hi", arg);
+	vmcall((uvlong)vhello, "hi %p %d", arg, 0xaa55);
 	vmcall((uvlong)vhello, "hi");
 	vmcall((uvlong)vhello, "hi");
 	for(p = (void *)/*vmbase*/0x1000000; p < (void *)/*vmend*/0x4000000; p++)
 		*p = poison;
 	for (int i = 0; i < 8; i++){
-		vmcall((uvlong)vhell);
+		vmcall((uvlong)vhello);
 		poison = poison<<8 | (uvlong)"POISON?!"[i];
 	}
 
@@ -83,7 +87,7 @@ watcher(void *arg)
 	uvlong *c;
 
 	c = arg;
-	print("watcher: *c is %#llx\n", *c);
+	print("watcher: arg is %p *c is %#llx\n", arg, *c);
 	while (! *c){
 		print(".%#llx.", *c);
 		sleep(1000);
@@ -99,6 +103,7 @@ threadmain(int argc, char **argv)
 	static u8int brdot[] = {0xeb, 0xfe};
 	int i, j;
 	Channel *c;
+	uvlong forever = 0;
 
 	ARGBEGIN{
 	case 'q':
@@ -123,6 +128,7 @@ threadmain(int argc, char **argv)
 
 	void vmthreadinit(uvlong lowmemsize, uvlong highmemsize);
 	vmthreadinit(14*1024*1024, 64*1024*1024);
+	memmove(vmbase+0x200000, (void*)0x200000, (uvlong)sbrk(0) - 0x200000);
 
 	switch (test) {
 		default:
@@ -144,7 +150,23 @@ threadmain(int argc, char **argv)
 
 			print("ran setter, *vmbase is %lld\n", *(uvlong*)vmbase);
 			break;
+		case 2:
+			threadcreate(watcher, &forever, 1024);
+			print("now run setter @%p \n",(u8int*)vmbase+(uvlong)setter);
+			if (vmthreadcreate((void *)((u8int*)vmbase+(uvlong)setter), (void *)9, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			print("setter created\n");
+
+			print("ran setter, *vmbase is %lld\n", *(uvlong*)vmbase);
+			break;
 		// This test will not work until we get KPT=EPT. 		
+		case 3:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)brdot), (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			break;
 		case -1:
 			i = 221;
 			c = vmthreadchan(sizeof(ulong), buffer);

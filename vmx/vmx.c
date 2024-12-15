@@ -618,7 +618,7 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	} 
 		memset(gmem, 0, sz);
 
-	print("mkregion %p %p %p %p \n", vmbase, 0, vmbase, vmthreadmemsize);
+	print("mkregion %p %p %p %p \n", vmbase, nil, vmbase, vmthreadmemsize);
 	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
@@ -653,11 +653,11 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
 	rset(R12, (uvlong)i); i += 0x13;
 	rset(R13, (uvlong)i); i += 0x13;
 	rset(R14, (uvlong)i); i += 0x13;
-	rset(R15, (uvlong)i); i += 0x13;
+	rset(R15, (uvlong)i);
 	}
 
 	rset(RPC, (uvlong)fn);
-	rset(RSP, (uvlong)vmbase + 0x100000);
+	rset(RSP, (uvlong)vmbase + vmthreadmemsize - BY2PG);
 	rset(RARG, (uvlong)arg+1); // RARG is right!
 	runloop();
 	return 0;
