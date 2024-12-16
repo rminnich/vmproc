@@ -312,8 +312,9 @@ Plan 9 threads are lightweight, non-preemptive coroutines, running in one or mor
 processes which share memory.
 Lightweight threads can be created in the current process, via theadreate; or in an external process, 
 via procrfork. Whether in the same process or a process created by procrfork, all memory is shared, including
-stacks. The main purpose of procrfork is to allow calls to blocking operations, such as file I/O, that can
-block the process and hence all the threads. A common programming idiom is to use procrfork for each
+stacks. The main purpose of procrfork is to allow calls to operations, such as file I/O, that can
+block the process and hence all the threads. 
+A common programming idiom is to use procrfork for each
 file descriptor a program creates. 
 Libthread also allows creation of processes which do not share data memory, via proccreate:
 these share the process code image and also run their own threads, however the are entirely
@@ -371,17 +372,58 @@ to the segment device. Status shows the VM status. Wait can be opened and read;
 the read call returns when the VM guest status changes (usually via a VMEXIT).
 For further information, see the man page on 9front.
 .LP
-The wait file returns information when the VM exits. 
+The wait file information is provided as text records, delimited by newlines.
+For example, a VM exits from a vmcall returns this:
+.P1
+ .vmcall 0x0 pc 0x20091a sp 0x4ffefac ilen 0x3 iinfo 0x0
+.P2
+The wait record for vmcall provides 
+the decoded instrucion (vmcall); the PC and SP, and the instruction length.
+Nothing more is needed to know how to handle the vmcall; the handler need only 
+extract the first parameter from RBP; and succeeding parameters from the stack.
+In Akaros, the first parameter was a number; in this paper, we show it as a function pointer. 
 .FS
 By contrast, on Akaros, a VM exit causes the thread to resume in Ring 3.
 .FE
-On 9front, the VM exit suspends the VM, and returns information about the exit via the wait file, to a
+.LP
+The VM exit suspends the VM, and returns information about the exit via the wait file, to a
 process that is reading from it. In current implementations,
-follwing libthread convention, code bundles up the information and writes
-it to a channel, where it comes under the domain of the lightweight threads. 
-Because pointers in the VM and in the host are compatible, any pointers returned via the VM exit, from the VM
-itself,
-and passed back via the wait file, can be transparently used by the thread managing that exit. 
+follwing libthread convention, that function bundles up the information and writes
+it to a channel, where it comes under the domain of the lightweight threads. The process
+is used so that it can block on the wait file read without blocking the lightweight threads.
+.FS
+This same technique is used in the Go runtime, but the process creation is managed by the Go runtime,
+not by the user.
+.FE
+.LP
+Handling of the vmexit is simple.
+The line is broken into fields, and the first field is checked against a lookup table:
+.P1
+struct ExitType {
+	char *name;
+	void (*f)(ExitInfo *);
+};
+static ExitType etypes[] = {
+	{"io", iohandler},
+	{".cpuid", cpuid},
+...
+};
+.P2
+Each entry in the lookup table names a class (e.g. "io") or an instruction (.e.g ".cpuid") and a pointer
+to a handler. The handler is provided with the ExitInfo. 
+The handler decodes the information, implements the operation, and updates the return PC.
+Here is the code for the hlt instruction:
+.P1
+static void
+hlt(ExitInfo *ei)
+{
+	if(irqactive < 0)
+		state = VMHALT;
+	skipinstr(ei);
+}
+.P2
+This instruction will set the VM state to VMHALT if there are no instructions active; advance the PC by calling 
+skipinstr; and return.
 .LP 
 In the next section, we describe how we implement VMThreads with libthread and devvmx.
 .SH
@@ -393,12 +435,13 @@ On Akaros, we call the guest-host mapping EPT=KTP, meaning that guest mappings (
 All that it means is that a guest physical address and a host virtual address point to the same memory; 
 hosts and guests can communicate pointers to each other without having to translate 
 them.
-In the examples we present below, process virtual memory addresses 0x1000000-0x5000000 correspond to guest physical addresses 0x1000000-0x5000000. A physical guest address in this range points to the same
+In the examples we present below, process virtual memory addresses a 64MiB region, 0x1000000-0x5000000, 
+corresponding to guest physical addresses 0x1000000-0x5000000. 
+A physical guest address in this range points to the same
 memory as the process virtual address.
 .LP
 Unlike Akaros, we have not implemented complete ID mapping for guest to host. 
-Most of the effect can be obtained, as 
-the 9front vmx command does, by using segattach, to create shared memory regions. 
+Most of the effect can be obtained by using segattach, to create shared memory regions. 
 The VMM creates a global segment, then directs the VM instance, 
 via the  ctl file, to use that segment for part of its memory. The result is that the
 VMM and the VM are using a common memory segment. 
@@ -410,7 +453,7 @@ the size of the low, unshared memory; and the size of a high range of shared mem
 .LP
 In the examples presented, the user calls vmthreadinit as follows:
 .P1
-vmthreadinit(14*1024*1024, 64*1024*1024);
+vmthreadinit(16*1024*1024, 64*1024*1024);
 .P2
 This is enough to allow 1 MiB for low guest physical memory; 1 MiB for the
 shared frame buffer, and a large shared ID area for the guest and host.
@@ -495,7 +538,7 @@ The VM is run by a VMM function, runloop, which starts the VM and calls yield(),
 .SH
 Using vmcall
 .LP
-VMcall allows guests to call funtions in the host. 
+VMcall allows guests to call functions in the host. 
 In the Akaros example, this was laborious: one needed to create a function, with case statements as to the
 call number.
 .LP
@@ -503,7 +546,11 @@ In practice, because the address space is shared, this can be far simpler: the f
 can be a function pointer.
 We need only add the vmcall instruction handling to the vmx exit handler in exith.c, which we have 
 copied from the vmx command to libthread. 
+Because pointers in the VM and in the host are compatible, any pointers returned via the VM exit, from the VM
+itself,
+and passed back via the wait file, can be transparently used by the thread managing that exit. 
 .P1
+// This code runs in the host to support vmcall exits.
 static void
 dovmcall(ExitInfo *ei)
 {
@@ -529,8 +576,9 @@ static ExitType etypes[] = {
 Then it is just a matter of calling the vmcall instruction in the guest.
 We show an example below.
 .LP
-First, the library provides a vmcall an assembly stub:
+First, the library provides a vmcall assembly stub, which is called in the guest:
 .P1
+// This code runs in the guest to implement a vmcall.
 TEXT vmcall(SB), $0
 	BYTE $0xf; BYTE $0x1; BYTE $0xc1
 	RET
@@ -541,15 +589,16 @@ void vmcall(uvlong, ...);
 .P2
 The stub need do no argument setup; the compiler does that as part of normal function calling.
 .LP
-We can define a simple function to be called from the vmcall:
+We can define a simple function to be called from the vmcall handler, i.e. in the host:
 .P1
+// Host code, callable from the host vmcall handler.
 void vhello(void){
-	print("hello\\n");
+	print("hello");
 }
 .P2
-The vmthread then becomes:
+The guest code vmthread then becomes:
 .P1
-// Guest code
+// Guest code, set up by a vmthreadcreate call:
 void
 setter(void *arg)
 {
@@ -557,18 +606,12 @@ setter(void *arg)
 }
 .P2 
 .LP
-The threadcreate is, therefore:
+The threadcreate is:
 .P1
 .P2
 vmthreadcreate(setter, nil, 1024);
 .LP
-The VMThread is ablel to call, via a vmcall, a function in the host.
-.LP
-When VMThreads is being used to run a kernel, 
-the common shared memory can provide a new way to implement drivers. A kernel
-can be provided with a set of functions to use to call IO functions. A kernel can hence
-be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
-function in memory.
+The VMThread is able to call, via a vmcall, a function in the host.
 .SH
 Running code in shared memory
 .LP
@@ -585,7 +628,7 @@ To call the program, we need only offset the addess with vmbase.
 .P1
 vmthreadcreate((void *)((u8int*)vmbase+(uvlong)setter), nil, 10240;
 .P2
-This is what the setter code looks like in this example:
+This is what the guest code looks like in this example:
 .P1
 	vmcall((uvlong)vhello, "hi %p %d", arg, 0xaa55);
 	vmcall((uvlong)vhello, "hi");
@@ -593,6 +636,16 @@ This is what the setter code looks like in this example:
 .P2
 This code is running in the VM, calling a function in the host.
 The function is being run by the thread that created the VM.
+.SH
+Using vmcall to implement kernel drivers in the guest
+.LP
+When VMThreads are being used to run a kernel, 
+the common shared memory can provide a new way to implement drivers. A kernel
+can be provided with a set of functions to use to call IO functions, and, hence,
+be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
+function in memory.
+This is particularly easy in Plan 9, since all resources are accessed via file IO.
+We show an example of a VM thread opening a network connection below.
 .SH
 Conclusions and future work
 .LP
