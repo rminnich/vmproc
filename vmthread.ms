@@ -310,20 +310,28 @@ A quick review of Plan 9 libthread
 .LP
 Plan 9 threads are lightweight, non-preemptive coroutines, running in one or more
 processes which share memory.
-The model also allows creation of processes which do not share memory, if required;
-these share the process code image and also run their own threads. We will not consider that additional
+Lightweight threads can be created in the current process, via theadreate; or in an external process, 
+via procrfork. Whether in the same process or a process created by procrfork, all memory is shared, including
+stacks. The main purpose of procrfork is to allow calls to blocking operations, such as file I/O, that can
+block the process and hence all the threads. A common programming idiom is to use procrfork for each
+file descriptor a program creates. 
+Libthread also allows creation of processes which do not share data memory, via proccreate:
+these share the process code image and also run their own threads, however the are entirely
+independent of the other processes. We will not consider that additional
 external process model here, as it has no bearing on VMThreads.
 .LP
-In libthread,
+As mentioned above, in libthread,
 a single thread in the same process is created by 
 .CW threadcreate.
 We follow this naming convention: VMThreads are created with vmthreadcreate.
 .LP
-Threads communicate with channels. A channel is an in-memory pipe which transmits
+Threads communicate via channels. A channel is an in-memory pipe which transmits
 basic scalar types such as bytes, ints, and pointers. When a thread sends on a 
-channel, it can be descheduled and another thread can run. Threads can also voluntarily
+channel, it will usually be descheduled and another thread can run. Threads can also voluntarily
 yield the processor with a yield() function.
 .LP
+Threads do not normally yield; sends and receives on chans cause scheduling events, which is how concurrency
+is supported. For parallelism, additional processes can be added via procrfork.
 For more information on Plan 9 threading, please see the documentation.
 .SH
 9front vmx device
@@ -362,6 +370,18 @@ from the fpregs and regs files. The map file shows how guest physical memory is 
 to the segment device. Status shows the VM status. Wait can be opened and read;
 the read call returns when the VM guest status changes (usually via a VMEXIT).
 For further information, see the man page on 9front.
+.LP
+The wait file returns information when the VM exits. 
+.FS
+By contrast, on Akaros, a VM exit causes the thread to resume in Ring 3.
+.FE
+On 9front, the VM exit suspends the VM, and returns information about the exit via the wait file, to a
+process that is reading from it. In current implementations,
+follwing libthread convention, code bundles up the information and writes
+it to a channel, where it comes under the domain of the lightweight threads. 
+Because pointers in the VM and in the host are compatible, any pointers returned via the VM exit, from the VM
+itself,
+and passed back via the wait file, can be transparently used by the thread managing that exit. 
 .LP 
 In the next section, we describe how we implement VMThreads with libthread and devvmx.
 .SH
@@ -376,15 +396,17 @@ them.
 In the examples we present below, process virtual memory addresses 0x1000000-0x5000000 correspond to guest physical addresses 0x1000000-0x5000000. A physical guest address in this range points to the same
 memory as the process virtual address.
 .LP
-We have not implemented complete ID mapping for guest to host. Most of the effect can be obtained, as 
-the 9front vmx command does, by using segattach. The VMM creates a global segment, then directs the VM instance, 
+Unlike Akaros, we have not implemented complete ID mapping for guest to host. 
+Most of the effect can be obtained, as 
+the 9front vmx command does, by using segattach, to create shared memory regions. 
+The VMM creates a global segment, then directs the VM instance, 
 via the  ctl file, to use that segment for part of its memory. The result is that the
 VMM and the VM are using a common memory segment. 
 .LP
-Vmthreadcreate maps a data area via segattach, and maps two segments from it
-as directed by an init function, vmthreadinit. This function takes two parameters: 
+The mapping is created by vmthreadinit.
+VMthreadinit maps a data area via segattach, and maps two segments from it
+as specified by two parameters: 
 the size of the low, unshared memory; and the size of a high range of shared memory.
-It creates another segment for the low range of memory.
 .LP
 In the examples presented, the user calls vmthreadinit as follows:
 .P1
@@ -431,26 +453,24 @@ In this example, the addresses from 16MiB to 80MiB are shared in in the process 
 .PS
 P:box "process virtual" wid 1.2i
 S:box "devsegment" wid 1.2i with .w at last box.e + (1,0)
-G:box "guest physical" wid 1.2i with .w at P.e + (4,0)
+G:box "guest physical" wid 1.2i with .w at S.e + (1,0)
 
-box "0-2MiB" ht .2i wid 1.2i with .n at P.s + (0,-.2i)
-box "2MiB-16MiB" ht .6i wid 1.2i with .n at last box.s
+box "0-2MiB" ht .2i wid 1.2i with .s at P.n + (0,.2i)
+box "2MiB-16MiB" ht .6i wid 1.2i with .s at last box.n
 
-P: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
-Q:box "80MiB-96MiB" ht .8i wid 1.2i with .n at last box.s
+Q: box "16MiB-80MiB" ht 1.2i wid 1.2i with .s at last box.n
+R:box "80MiB-96MiB" ht .8i wid 1.2i with .s at last box.n
 
-S: box "0-64MiB" ht 1.2i wid 1.2i with .n at S.s + (0,-1.2i)
-T: box "64MiB-80MiB" ht .8i wid 1.2i with .n at last box.s
+T: box "0-64MiB" ht 1.2i wid 1.2i with .s at S.n + (0,1i)
+U: box "64MiB-80MiB" ht .8i wid 1.2i with .s at last box.n
 
-G: box "0-16MiB" ht .8i wid 1.2i with .n at G.s + (0,-.2i)
-H: box "16MiB-80MiB" ht 1.2i wid 1.2i with .n at last box.s
+H: box "0-16MiB" ht .8i wid 1.2i with .s at G.n + (0,.2i)
+I: box "16MiB-80MiB" ht 1.2i wid 1.2i with .s at last box.n
 
-line dashed "common guest/process 64MiB area based at 16 MiB" from P.ne to H.nw
-arrow from P.e to S.w
-arrow from Q.e to T.w
-
-arrow from S.e to H.w
-arrow from T.e to G.w
+line from Q.ne to I.nw
+line from Q.se to I.sw
+arrow from R.e to U.w
+spline -> from U.e right 3 then to H.e 
 .PE
 .SH
 Code
@@ -549,6 +569,30 @@ the common shared memory can provide a new way to implement drivers. A kernel
 can be provided with a set of functions to use to call IO functions. A kernel can hence
 be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
 function in memory.
+.SH
+Running code in shared memory
+.LP
+Next we show the code which runs in the shared space.
+First, code copies the running program to the shared space:
+.P1
+memmove(vmbase+0x200000, (void*)0x200000, (uvlong)sbrk(0) - 0x200000);
+.P2
+Note that the code must copy from the start of the program, at 0x200000, to that location
+offset from vmbase. In any real PC, the low 1MiB of memory has many legacy addresses that are best avoided;
+further, it is best to align the destination on a 2 MiB boundary.
+.LP
+To call the program, we need only offset the addess with vmbase.
+.P1
+vmthreadcreate((void *)((u8int*)vmbase+(uvlong)setter), nil, 10240;
+.P2
+This is what the setter code looks like in this example:
+.P1
+	vmcall((uvlong)vhello, "hi %p %d", arg, 0xaa55);
+	vmcall((uvlong)vhello, "hi");
+	vmcall((uvlong)vhello, "hi");
+.P2
+This code is running in the VM, calling a function in the host.
+The function is being run by the thread that created the VM.
 .SH
 Conclusions and future work
 .LP
