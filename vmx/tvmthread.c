@@ -99,7 +99,7 @@ network(void *arg)
 	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong);
 	uvlong fd;
 	fd = vmcall((uvlong)callopen, (uvlong)open, (uvlong)"/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0);
-	print("fd is %lld\n", fd);
+	vmcall((uvlong)callopen, (uvlong)print, (uvlong)"fd is %lld\n", fd, 0);
 	while (1);
 }
 
