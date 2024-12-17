@@ -53,7 +53,6 @@ void vhello(void *a1, void *a2, void *a3, void *a4)
 	write(1,  hi, sizeof(hi)-1);
 	print("arg is %p %p %p %p\n", a1, a2, a3, a4);
 	// not yet ...print((char*)a1, a2, a3, a4);
-
 }
 
 void
@@ -79,6 +78,29 @@ setter(void *arg)
 //	c = vmbase;
 	c += 0x666;
 	while (1) {	*c = 1;}
+}
+
+uvlong
+callopen(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
+{
+	uvlong fd = 0xcafebabe;
+	uvlong (*f)(uvlong, uvlong, uvlong, uvlong) = ptr;
+
+	print("callopen(%#p, %#llx, %#llx, %#llx, %#llx)\n", f, a0, a1, a2, a3);
+ 	fd = f(a0, a1, a2, a3);
+	print("fd is %lld\n", fd);
+	return (uvlong)fd;
+}
+
+void
+network(void *arg)
+{
+	USED(arg);
+	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong);
+	uvlong fd;
+	fd = vmcall((uvlong)callopen, (uvlong)open, (uvlong)"/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0);
+	print("fd is %lld\n", fd);
+	while (1);
 }
 
 void
@@ -164,6 +186,12 @@ threadmain(int argc, char **argv)
 		case 3:
 			threadcreate(watcher, &forever, 1024);
 			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)brdot), (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			break;
+		case 4:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)network), (void *)0x1000000, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
 			break;

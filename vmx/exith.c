@@ -461,12 +461,19 @@ xsetbv(ExitInfo *ei)
 static void
 dovmcall(ExitInfo *ei)
 {
-	void (*f)(void);
-	uvlong sp;
+	uvlong (*f)(...);
+	uvlong out;
+	uvlong args[4];
+	uvlong *sp;
 	f = (void *)rget(RBP);
-	sp = rget(RSP);
-	print("VMCALL %p %p %p sp %p *(8+sp) %p\n", rget(RAX), rget(RDX), f, sp, *(uvlong*)(sp+8));
-	f();
+	sp = (uvlong *)(rget(RSP)+4); // ignore 32 bits from call to vmcall
+	args[0] = sp[1];
+	args[1] = sp[2];
+	args[2] = sp[3];
+	args[3] = sp[4];
+	print("VMCALL sp %p *sp, %p(%p, %p, %p, %p)\n", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	out = f(args[0], args[1], args[2], args[3]);
+	rset(RAX, out);
 	skipinstr(ei);
 }
 
