@@ -88,11 +88,11 @@ fcall(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 	uvlong fd;
 	uvlong (*f)(uvlong, uvlong, uvlong, uvlong) = ptr;
 
-	print("fcall(%#p, %#llx, %#llx, %#llx, %#llx)...", ptr, a0, a1, a2, a3);
+	print("EFALL:f(%#p, %#llx, %#llx, %#llx, %#llx)...", ptr, a0, a1, a2, a3);
 
  	fd = f(a0, a1, a2, a3);
 
-	print("%lld\n", fd);
+	print("XFCALL:%lld\n", fd);
 
 	return (uvlong)fd;
 }
@@ -102,24 +102,24 @@ syscall(uvlong callno, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 {
 	uvlong ret = (uvlong)-1;
 	int i;
-
+	print("ESYSCALL:");
 	switch(callno) {
 		case OPEN:
 			print("open %s %lld\n", (void *)a0, a1);
 			i = open((void *)a0, (int)a1);
-			print("fd %d\n", i);
+			print("XSYSCALL:fd %d\n", i);
 			ret = (uvlong)i;
 			break;
 		case _READ:
 			print("read(%d, %p,%d)\n", (int)a0, (void *)a1, (int)a2);
 			i = read((int)a0, (void *)a1, (int)a2);
-			print("fd %d\n", i);
+			print("XSYSCALL:fd %d\n", i);
 			ret = (uvlong)i;
 			break;
 		case _WRITE:
 			print("write(%d, %p,%d)\n", (int)a0, (void *)a1, (int)a2);
 			i = write((int)a0, (void *)a1, (int)a2);
-			print("fd %d\n", i);
+			print("XSYSCALL:fd %d\n", i);
 			ret = (uvlong)i;
 			break;
 
@@ -173,7 +173,7 @@ syscall(uvlong callno, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 		case TSEMACQUIRE:
 		case _NSEC:
 		default:
-			print("bad syscall(%#llx, %#llx, %#llx, %#llx, %#llx)\n", callno, a0, a1, a2, a3);
+			print("XSYSCALL:bad syscall(%#llx, %#llx, %#llx, %#llx, %#llx)\n", callno, a0, a1, a2, a3);
 	}
 
 	return ret;
