@@ -6,6 +6,7 @@
 #include "x86.h"
 
 int persist = 1;
+extern int debug;
 
 typedef struct ExitInfo ExitInfo;
 struct ExitInfo {
@@ -471,9 +472,9 @@ dovmcall(ExitInfo *ei)
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	print("VMCALL sp %p *sp, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	if (debug > 2) print("VMCALL sp %p *sp, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
 	out = f(args[0], args[1], args[2], args[3]);
-	print("...%d\n", out);
+	if (debug > 2) print("...%d\n", out);
 	rset(RAX, out);
 	skipinstr(ei);
 }
@@ -509,7 +510,7 @@ processexit(char *msg)
 	ExitInfo ei;
 	extern int getexit;
 
-	print("processexit: %s\n", msg);
+	if (debug > 2) print("processexit: %s\n", msg);
 	strcpy(msgc, msg);
 	nf = tokenize(msgc, f, nelem(f));
 	if(nf < 2) sysfatal("invalid wait message: %s", msg);

@@ -10,6 +10,7 @@ int test;
 int (*fn)(void(*)(void*), void*, uint) = threadcreate;
 int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize);
 extern u8int *vmbase;
+extern int debug;
 
 Channel*vmthreadchan(int elemsize, int elemcnt);
 void
@@ -109,6 +110,18 @@ syscall(uvlong callno, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 			print("fd %d\n", i);
 			ret = (uvlong)i;
 			break;
+		case _READ:
+			print("read(%d, %p,%d)\n", (int)a0, (void *)a1, (int)a2);
+			i = read((int)a0, (void *)a1, (int)a2);
+			print("fd %d\n", i);
+			ret = (uvlong)i;
+			break;
+		case _WRITE:
+			print("write(%d, %p,%d)\n", (int)a0, (void *)a1, (int)a2);
+			i = write((int)a0, (void *)a1, (int)a2);
+			print("fd %d\n", i);
+			ret = (uvlong)i;
+			break;
 
 		case SYSR1:
 		case _ERRSTR:
@@ -124,14 +137,10 @@ syscall(uvlong callno, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 		case _FSTAT:
 		case SEGBRK:
 		case _MOUNT:
-		case _READ:
-			print("read(%p,%lld)\n", (void *)a0, a1);
 		case OSEEK:
 		case SLEEP:
 		case _STAT:
 		case RFORK:
-		case _WRITE:
-			print("write(%p,%lld)\n", (void *)a0, a1);
 		case PIPE:
 		case CREATE:
 		case FD2PATH:
@@ -182,10 +191,10 @@ network(void *arg)
 	vmcall((uvlong)fcall,(uvlong)print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
 	fd = vmcall((uvlong)syscall,OPEN, "/net/cs", 2, 0, 0);
 	vmcall((uvlong)fcall,(uvlong)print, "fd is %d\n", fd, 0, 0);
-	amt = vmcall((uvlong)syscall,_WRITE, addr, sizeof(addr)-1, 0, 0);
+	amt = vmcall((uvlong)syscall,_WRITE, (void *)fd, (uvlong)addr, sizeof(addr)-1,  0);
 	vmcall((uvlong)fcall,(uvlong)print, "amt is %d\n", amt, 0, 0);
 	memset(buf, 0, sizeof(buf));
-	amt = vmcall((uvlong)syscall,_READ, buf, sizeof(buf)-1, 0, 0);
+	amt = vmcall((uvlong)syscall,_READ, (void *)fd, (uvlong)buf, sizeof(buf)-1, 0);
 	vmcall((uvlong)fcall,(uvlong)print, "amt is %d buf is %s\n", amt, (uvlong)buf, 0);
 	fd = (int)vmcall((uvlong)syscall, OPEN, "/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
 	vmcall((uvlong)fcall, (uvlong)print,"NOTDIRECT:fd is %lld\n", fd, 0, 0);
@@ -249,7 +258,7 @@ watcher(void *arg)
 	c = arg;
 	print("watcher: arg is %p *c is %#llx\n", arg, *c);
 	while (! *c){
-		print(".%#llx.", *c);
+		if (debug > 2) print(".%#llx.", *c);
 		sleep(1000);
 		yield();
 	}

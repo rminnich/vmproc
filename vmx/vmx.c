@@ -24,7 +24,7 @@ uvlong vmthreadmemsize = 16*1024*1024;
 u8int *vmbase = (void *)0x1000000;
 u8int *vmend = (void *)(0x1000000 + 16*1024*1024);
 u8int *vmcode;
-
+int debug = 0;
 
 void *
 emalloc(ulong sz)
@@ -358,10 +358,10 @@ launch(void)
 	char *s;
 
 	s = rcflush(1);
-	print("GO!\n");
+	if (debug > 2) print("GO!\n");
 	if(ctl("go %s", s == nil ? "" : s) < 0)
 		sysfatal("go %s: %r", s == nil ? "" : s);
-	print("go is back; getexit %d\n", getexit);
+	if (debug > 2) print("go is back; getexit %d\n", getexit);
 	getexit++;
 }
 
@@ -381,7 +381,7 @@ waitproc(void *)
 			sysfatal("read: %r");
 		p = strchr(buf, '\n');
 		if(p != nil) *p = 0;
-		print("waitproc: %s\n", buf);
+		if (debug > 2) print("waitproc: %s\n", buf);
 		if (0)
 			for(i = 0; i < 18; i++){
 				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
