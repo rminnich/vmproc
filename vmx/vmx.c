@@ -358,7 +358,7 @@ launch(void)
 	char *s;
 
 	s = rcflush(1);
-	if (debug > 2) print("GO!\n");
+	if (debug > 2) print("go %s\n", s);
 	if(ctl("go %s", s == nil ? "" : s) < 0)
 		sysfatal("go %s: %r", s == nil ? "" : s);
 	if (debug > 2) print("go is back; getexit %d\n", getexit);

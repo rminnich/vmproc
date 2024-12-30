@@ -12,6 +12,54 @@ int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize);
 extern u8int *vmbase;
 extern int debug;
 
+uvlong
+fcall(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
+{
+	uvlong fd;
+	uvlong (*f)(uvlong, uvlong, uvlong, uvlong) = ptr;
+
+	print("EFCALL:f(%#p, %#llx, %#llx, %#llx, %#llx)...", ptr, a0, a1, a2, a3);
+
+ 	fd = f(a0, a1, a2, a3);
+
+	print("XFCALL:%lld\n", fd);
+
+	return (uvlong)fd;
+}
+
+uvlong puts(uvlong i)
+{
+	char c = (char)i;
+	uvlong ret;
+	print("EPUTS:%#llx...", i);
+	ret = write(1, &c, 1);
+	print("XPUTS\n");
+	return ret;
+}
+
+int
+vprint(int fd, char *fmt, ...)
+{
+	uvlong vmcall(void *, void *, uvlong, uvlong, uvlong, uvlong);
+	char buf[4096];
+	va_list a;
+	int len;
+
+	memset(buf, 0, sizeof(buf));
+	va_start(a, fmt);
+	len = vsnprint(buf, sizeof(buf), fmt, a);
+	va_end(a);
+
+	if (len < 0) {
+		memset(buf, 0, sizeof(buf));
+		len = snprint(buf, sizeof(buf), "vsnprint:%r\n");
+		vmcall(fcall, write, (uvlong)2, (uvlong)buf, (uvlong)len, (uvlong)0);
+		return -1;
+	}
+	return vmcall(fcall, write, (uvlong)fd, (uvlong)buf, (uvlong)len, (uvlong)0);
+}
+
+
 Channel*vmthreadchan(int elemsize, int elemcnt);
 void
 primethread(void *arg)
@@ -80,21 +128,6 @@ setter(void *arg)
 //	c = vmbase;
 	c += 0x666;
 	while (1) {	*c = 1;}
-}
-
-uvlong
-fcall(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
-{
-	uvlong fd;
-	uvlong (*f)(uvlong, uvlong, uvlong, uvlong) = ptr;
-
-	print("EFALL:f(%#p, %#llx, %#llx, %#llx, %#llx)...", ptr, a0, a1, a2, a3);
-
- 	fd = f(a0, a1, a2, a3);
-
-	print("XFCALL:%lld\n", fd);
-
-	return (uvlong)fd;
 }
 
 uvlong
@@ -188,17 +221,33 @@ network(void *arg)
 	char *addr = "icmp!127.1!1";
 	char buf[256];
 	static uvlong amt;
+	vprint(1, "addr is %s\n", addr);
 	vmcall((uvlong)fcall,(uvlong)print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
 	fd = vmcall((uvlong)syscall,OPEN, "/net/cs", 2, 0, 0);
-	vmcall((uvlong)fcall,(uvlong)print, "fd is %d\n", fd, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "fd is %p\n", (uvlong)fd, 0, 0);
 	amt = vmcall((uvlong)syscall,_WRITE, (void *)fd, (uvlong)addr, sizeof(addr)-1,  0);
-	vmcall((uvlong)fcall,(uvlong)print, "amt is %d\n", amt, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %p\n", (uvlong)amt, 0, 0);
 	memset(buf, 0, sizeof(buf));
 	amt = vmcall((uvlong)syscall,_READ, (void *)fd, (uvlong)buf, sizeof(buf)-1, 0);
-	vmcall((uvlong)fcall,(uvlong)print, "amt is %d buf is %s\n", amt, (uvlong)buf, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %p buf is %s\n", (uvlong)amt, (uvlong)buf, 0);
 	fd = (int)vmcall((uvlong)syscall, OPEN, "/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
 	vmcall((uvlong)fcall, (uvlong)print,"NOTDIRECT:fd is %lld\n", fd, 0, 0);
 	vmcall((uvlong)print, (uvlong)"DIRECT: fd is %lld\n", (void *)fd, 0, 0, 0);
+	while (1);
+}
+
+void
+message(void *arg)
+{
+	USED(arg);
+	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong, uvlong);
+	int i;
+	char msg[] = "hi there\n";
+	vmcall((uvlong)fcall,(uvlong)print, (uvlong)"let's go, addr %p :%s:!\n", (uvlong)msg, (uvlong)msg,  0);
+	if (0)for(i = 0; i < 26; i++)
+		vmcall((uvlong)puts, (uvlong)('A'+i), 0, 0, 0, 0);
+	for(i = 0; i < sizeof("hi there\n")-1; i++)
+		vmcall((uvlong)fcall, (uvlong)puts, (uvlong)(msg[i]), 0, 0, 0);
 	while (1);
 }
 
@@ -274,13 +323,16 @@ threadmain(int argc, char **argv)
 	Channel *c;
 	uvlong forever = 0;
 
-	test = 4;
+	test = 6;
 	ARGBEGIN{
 	case 'q':
 		quiet = 1;
 		break;
 	case 'b':
 		buffer = atoi(ARGF());
+		break;
+	case 'd':
+		debug = atoi(ARGF());
 		break;
 	case 't':
 		test = atoi(ARGF());
@@ -346,6 +398,12 @@ threadmain(int argc, char **argv)
 		case 5:
 			threadcreate(watcher, &forever, 1024);
 			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)directcall), (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			break;
+		case 6:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)message), (void *)0x1000000, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
 			break;

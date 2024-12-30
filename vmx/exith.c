@@ -472,9 +472,9 @@ dovmcall(ExitInfo *ei)
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	if (debug > 2) print("VMCALL sp %p *sp, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	if (debug > 1) print("VMCALL sp %p *sp, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
 	out = f(args[0], args[1], args[2], args[3]);
-	if (debug > -1) print("...%d\n", out);
+	if (debug > 1) print("...%d\n", out);
 	rset(RAX, out);
 	skipinstr(ei);
 }
