@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
+#include "/sys/src/libc/9syscall/sys.h"
 
 int quiet;
 int goal;
@@ -81,26 +82,163 @@ setter(void *arg)
 }
 
 uvlong
-callopen(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
+fcall(void *ptr, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
 {
-	uvlong fd = 0xcafebabe;
+	uvlong fd;
 	uvlong (*f)(uvlong, uvlong, uvlong, uvlong) = ptr;
 
-	print("callopen(%#p, %#llx, %#llx, %#llx, %#llx)\n", f, a0, a1, a2, a3);
+	print("fcall(%#p, %#llx, %#llx, %#llx, %#llx)...", ptr, a0, a1, a2, a3);
+
  	fd = f(a0, a1, a2, a3);
-	print("fd is %lld\n", fd);
+
+	print("%lld\n", fd);
+
 	return (uvlong)fd;
+}
+
+uvlong
+syscall(uvlong callno, uvlong a0, uvlong a1, uvlong a2, uvlong a3)
+{
+	uvlong ret = (uvlong)-1;
+	int i;
+
+	switch(callno) {
+		case OPEN:
+			print("open %s %lld\n", (void *)a0, a1);
+			i = open((void *)a0, (int)a1);
+			print("fd %d\n", i);
+			ret = (uvlong)i;
+			break;
+
+		case SYSR1:
+		case _ERRSTR:
+		case BIND:
+		case CHDIR:
+		case CLOSE:
+		case DUP:
+		case ALARM:
+		case EXEC:
+		case EXITS:
+		case _FSESSION:
+		case FAUTH:
+		case _FSTAT:
+		case SEGBRK:
+		case _MOUNT:
+		case _READ:
+			print("read(%p,%lld)\n", (void *)a0, a1);
+		case OSEEK:
+		case SLEEP:
+		case _STAT:
+		case RFORK:
+		case _WRITE:
+			print("write(%p,%lld)\n", (void *)a0, a1);
+		case PIPE:
+		case CREATE:
+		case FD2PATH:
+		case BRK_:
+		case REMOVE:
+		case _WSTAT:
+		case _FWSTAT:
+		case NOTIFY:
+		case NOTED:
+		case SEGATTACH:
+		case SEGDETACH:
+		case SEGFREE:
+		case SEGFLUSH:
+		case RENDEZVOUS:
+		case UNMOUNT:
+		case _WAIT:
+		case SEMACQUIRE:
+		case SEMRELEASE:
+		case SEEK:
+		case FVERSION:
+		case ERRSTR:
+		case STAT:
+		case FSTAT:
+		case WSTAT:
+		case FWSTAT:
+		case MOUNT:
+		case AWAIT:
+		case PREAD:
+		case PWRITE:
+		case TSEMACQUIRE:
+		case _NSEC:
+		default:
+			print("bad syscall(%#llx, %#llx, %#llx, %#llx, %#llx)\n", callno, a0, a1, a2, a3);
+	}
+
+	return ret;
 }
 
 void
 network(void *arg)
 {
 	USED(arg);
-	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong);
-	uvlong fd;
-	fd = vmcall((uvlong)callopen, (uvlong)open, (uvlong)"/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0);
-	vmcall((uvlong)callopen, (uvlong)print, (uvlong)"fd is %lld\n", fd, 0);
+	extern uvlong vmcall(uvlong,uvlong,void *,uvlong,uvlong, uvlong);
+	int fd;
+	char *addr = "icmp!127.1!1";
+	char buf[256];
+	static uvlong amt;
+	vmcall((uvlong)fcall,(uvlong)print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
+	fd = vmcall((uvlong)syscall,OPEN, "/net/cs", 2, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "fd is %d\n", fd, 0, 0);
+	amt = vmcall((uvlong)syscall,_WRITE, addr, sizeof(addr)-1, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %d\n", amt, 0, 0);
+	memset(buf, 0, sizeof(buf));
+	amt = vmcall((uvlong)syscall,_READ, buf, sizeof(buf)-1, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %d buf is %s\n", amt, (uvlong)buf, 0);
+	fd = (int)vmcall((uvlong)syscall, OPEN, "/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
+	vmcall((uvlong)fcall, (uvlong)print,"NOTDIRECT:fd is %lld\n", fd, 0, 0);
+	vmcall((uvlong)print, (uvlong)"DIRECT: fd is %lld\n", (void *)fd, 0, 0, 0);
 	while (1);
+}
+
+/*
+1004 ping Open 209c8f 0x401718/"/dev/bintime" 0x20 = 3 "" 1735334648612860694 1735334648613596096
+1004 ping Pread 205d95 3 0x7fffffffee60 8 0 0x7fffffffee60/"..%.1..." 8 0 = 8 "" 1735334648614354588 1735334648614359063
+1004 ping Notify 209c9e 0x200059 = 0 "" 1735334648615758638 1735334648615759756
+1004 ping Open 209c8f 0x7fffffffec68/"/net/cs" 0x2 = 4 "" 1735334648616963690 1735334648617119799
+1004 ping Pwrite 205d86 4  0x7fffffffec68/ 12 -1 = 12 "" 1735334648618245881 1735334648618339584
+1004 ping Seek 205d77 0x7fffffffea98 4 0x0 0 = 0 "" 1735334648619659993 1735334648619662667
+1004 ping Pread 205d95 4 0x7fffffffec68 127 -1 0x7fffffffec68/"/net/icmp/clone.127.0.0.1!1" 127 -1 = 27 "" 1735334648620970080 1735334648621019088
+1004 ping Open 209c8f 0x7fffffffe994/"/net/icmp/clone" 0x2 = 5 "" 1735334648622173597 1735334648622233892
+1004 ping Pread 205d95 5 0x7fffffffe894 255 -1 0x7fffffffe894/"0" 255 -1 = 1 "" 1735334650308164124 1735334650308176544
+1004 ping Pwrite 205d86 5  0x7fffffffe894/"connect.127.0.0.1!1" 19 -1 = 19 "" 1735334650309797343 1735334650309829501
+1004 ping Open 209c8f 0x7fffffffe794/"/net/icmp/0/data" 0x2 = 6 "" 1735334650311204678 1735334650311273505
+1004 ping Close 209cbc 5 = 0 "" 1735334650312544420 1735334650312555069
+1004 ping Close 209cbc 4 = 0 "" 1735334650313500964 1735334650313560461
+1004 ping Fd2path 205da4 6 0x7fffffffedd0 128"" 128 = 0  1735334650314679832 1735334650314683945
+1004 ping Brk 205dc2 0x403878 = 0 "" 1735334650315731640 1735334650315734449
+1004 ping Stat 205d68 0x4028e8/"/net/icmp/0" 0x4029b8 115 = 68 "" 1735334650316927418 1735334650316992458
+1004 ping Open 209c8f 0x7fffffffec88/"/net/icmp/0/local" 0x20 = 4 "" 1735334650318235457 1735334650318288343
+1004 ping Pread 205d95 4 0x7fffffffec88 127 -1 0x7fffffffec88/"127.0.0.1!61144." 127 -1 = 16 "" 1735334650319576664 1735334650319590148
+1004 ping Close 209cbc 4 = 0 "" 1735334650320709489 1735334650320719616
+1004 ping Open 209c8f 0x7fffffffec88/"/net/icmp/0/remote" 0x20 = 4 "" 1735334652774375445 1735334652774453612
+1004 ping Pread 205d95 4 0x7fffffffec88 127 -1 0x7fffffffec88/"127.0.0.1!1." 127 -1 = 12 "" 1735334652776324753 1735334652776340760
+1004 ping Close 209cbc 4 = 0 "" 1735334652777877994 1735334652777889004
+1004 ping Pwrite 205d86 1  0x7fffffffecd8/"sending.32.64.byte.messages.1000.ms.apart.to.icmp!127.0.0.1!1." 62 -1sending 32 64 byte messages 1000 ms apart to icmp!127.0.0.1!1
+ = 62 "" 1735334652779089818 1735334652780566417
+*/
+void directcall(void *arg)
+{
+	extern uvlong vmcall(void*,void*,uvlong,uvlong,uvlong);
+	static int fd;	
+	char *addr = "icmp!127.1!1";
+	char buf[256];
+	static uvlong amt;
+	USED(arg);
+	vmcall(print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
+	fd = vmcall(open, "/net/cs", 2, 0, 0);
+	vmcall(print, "fd is %d\n", fd, 0, 0);
+	amt = vmcall(write, addr, sizeof(addr)-1, 0, 0);
+	vmcall(print, "amt is %d\n", amt, 0, 0);
+	memset(buf, 0, sizeof(buf));
+	amt = vmcall(read, buf, sizeof(buf)-1, 0, 0);
+	vmcall(print, "amt is %d buf is %s\n", amt, (uvlong)buf, 0);
+	vmcall(print, "direct call\n", 0, 0, 0);
+	fd = (int) vmcall(open, "/net/icmp/clone", ORDWR, 0, 0);
+	vmcall(print, "fd is %d\n", fd, 0, 0);
+	while(1);
 }
 
 void
@@ -127,6 +265,7 @@ threadmain(int argc, char **argv)
 	Channel *c;
 	uvlong forever = 0;
 
+	test = 4;
 	ARGBEGIN{
 	case 'q':
 		quiet = 1;
@@ -192,6 +331,12 @@ threadmain(int argc, char **argv)
 		case 4:
 			threadcreate(watcher, &forever, 1024);
 			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)network), (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			break;
+		case 5:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate((void *)(void *)((u8int*)vmbase+(uvlong)directcall), (void *)0x1000000, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
 			break;

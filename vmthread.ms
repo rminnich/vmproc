@@ -41,12 +41,13 @@ On almost all modern operating systems, virtual machines (VMs) are supported by 
 as a device. 
 VMMs open a device, and operate on it as they would any other real device, such as a network card. 
 .LP
-While virtualization is common, it is not easy to write code for. 
+While virtualization is common, and several VMMs are in wide use, 
+writing a VMM is difficult. 
 The device model provided by most kernels (e.g. Linux) is tricky and easy to get wrong, with 
 difficult to understand failures. 
 This interface is difficult enough that,
 17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
-The API is also complex:
+The API is also broad:
 virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
 Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
 .LP
@@ -116,7 +117,10 @@ it will exit with error codes, interrupts,
 or when the guest requests services;  
 these VM exits are 
 managed by the VMM. 
-The VMM can be called upon to emulate some instructions; handle timer interrupts; or manage faults. 
+The VMM can be called upon to emulate some instructions; handle timer interrupts; or manage faults.
+The VMM determines if the VM exit can not be handled, meaning the VM must
+end; or the VM can be resumed. During the lifetime of a typical VM, millions
+of VM exits are processed and millions of VM resumes are issued by the VMM.
 .LP
 VMMs can be very complex, and, consequently, can be very large. 
 We know of one proprietary VMM which is a 500 MiB binary; 
@@ -616,7 +620,8 @@ The VMThread is able to call, via a vmcall, a function in the host.
 Running code in shared memory
 .LP
 Next we show the code which runs in the shared space.
-First, code copies the running program to the shared space:
+First, support code copies the running program to the shared space,to provide
+a default image:
 .P1
 memmove(vmbase+0x200000, (void*)0x200000, (uvlong)sbrk(0) - 0x200000);
 .P2
@@ -624,7 +629,7 @@ Note that the code must copy from the start of the program, at 0x200000, to that
 offset from vmbase. In any real PC, the low 1MiB of memory has many legacy addresses that are best avoided;
 further, it is best to align the destination on a 2 MiB boundary.
 .LP
-To call the program, we need only offset the addess with vmbase.
+To call the program, for now, we must offset the addess with vmbase. 
 .P1
 vmthreadcreate((void *)((u8int*)vmbase+(uvlong)setter), nil, 10240;
 .P2
@@ -637,15 +642,49 @@ This is what the guest code looks like in this example:
 This code is running in the VM, calling a function in the host.
 The function is being run by the thread that created the VM.
 .SH
+More complex guest code
+.LP
+Once we are able to call arbitrary code, we can implement more complex guest functions.
+The function shown below is the first part of ping.
+.P1
+void directcall(void *arg)
+{
+	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong);
+	int fd;
+	USED(arg);
+	vmcall((uvlong)print, (uvlong)"direct call\n", 0, 0, 0);
+	fd = (int) vmcall((uvlong)open, (uvlong)"/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
+	vmcall((uvlong)print, (uvlong)"fd is %d\n", fd, 0, 0);
+	while(1);
+}
+.P2
+This is not nearly as convenient as it needs to be, of course, but it does work.
+.SH
 Using vmcall to implement kernel drivers in the guest
 .LP
 When VMThreads are being used to run a kernel, 
-the common shared memory can provide a new way to implement drivers. A kernel
-can be provided with a set of functions to use to call IO functions, and, hence,
-be run without needing IO or device emulation. The entire bottom half of the kernel can consist of calls to
-function in memory.
-This is particularly easy in Plan 9, since all resources are accessed via file IO.
-We show an example of a VM thread opening a network connection below.
+the common shared memory can provide a new way to implement
+access to the platform.
+Since all resources in Plan 9 are accessed via the file interface, it suffices to make
+the file interface conveniently accessible to the guest -- which, as shown above, we have done.
+The entire bottom half of the kernel can consist of calls to
+functions in the low memory. 
+The code is readonly, so corrupting it is not an issue. The data is writable, but it is a copy -- 
+any corruption of the low data memory will result in the untimely exit of the guest.
+.LP
+One way to implement this would be to create a device, e.g. #Y, that relayed file IO from guest to host.
+So, e.g., an open of #Y/net/icmp/clone would open /net/icmp/clone on the host. 
+.LP
+In this scenario, the guest would be much simpler. It would need no IO devices or memory-mapped devices, 
+or even its own TCP stack. Guest network IO would be completely observable, not hidden behind 
+a sequence of IOs to an emulated network device.
+The result is a very different model than has been used in recent virtual machine models: the guest kernel
+is accessing system resources in the same way as any host process, via file operations; 
+its operations are visible in the 
+same way host process operations are visible. This would rememedy a tricky problem that comes with VMs: when
+malware hides behind a virtualization wall, using the opacity of emulated device IO to hide its network
+operations. 
+We can easily see what is going on behind the virtualization veil. 
 .SH
 Conclusions and future work
 .LP
