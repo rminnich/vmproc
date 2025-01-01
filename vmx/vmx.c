@@ -672,9 +672,10 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 	rset("efer", (1 << 8) | (1 << 10)); // do we need bit 10
 	print("Set cr3 %p\n", (vmbase + 0x1000));
 	rset("cr3", (uvlong)(vmbase + 0x1000));
+	}
 	*(uvlong *)(vmbase + 0x1000) = (uvlong)(vmbase + 0x00002003); // points to PML3
 	*(uvlong *)(vmbase + 0x2000) = 0x00000083; // points to first GiB
-	}
+
 	runloop();
 	return 0;
 }
