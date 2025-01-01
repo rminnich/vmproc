@@ -467,6 +467,13 @@ dovmcall(ExitInfo *ei)
 	uvlong args[4];
 	uvlong *sp;
 	f = (void *)rget(RBP);
+	// Special vmcalls that we handle right here. For now.
+	if ((uvlong)f < 128) {
+		print("%c", (char)f);
+		rset(RAX, 1);
+		skipinstr(ei);
+		return;
+	}
 	sp = (uvlong *)(rget(RSP)+4); // ignore 32 bits from call to vmcall
 	args[0] = sp[1];
 	args[1] = sp[2];

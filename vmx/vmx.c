@@ -631,7 +631,7 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 }
 
 int
-vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
+vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 {
 	int i = 0x13;
 	//static u8int brdot[] = {0xeb, 0xfe};
@@ -657,8 +657,24 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint _/*stacksize*/)
 	}
 
 	rset(RPC, (uvlong)fn);
-	rset(RSP, (uvlong)vmbase + vmthreadmemsize - BY2PG);
+	rset(RSP, (uvlong)vmbase + vmthreadmemsize - stacksize);
 	rset(RARG, (uvlong)arg+1); // RARG is right!
+	if (0){
+	// To start in 64-bit mode
+	// devvmx sets up gdtr:
+	// vmcswrite(HOST_GDTR, (uintptr) m->gdt);
+	// We need to further set some other things:
+	rset("cs", 8);
+	rset("ds", 16);
+	rset("es", 16);
+	rset("cr0real", 0x80000001);
+	rset("cr4real", 1 << 5);
+	rset("efer", (1 << 8) | (1 << 10)); // do we need bit 10
+	print("Set cr3 %p\n", (vmbase + 0x1000));
+	rset("cr3", (uvlong)(vmbase + 0x1000));
+	*(uvlong *)(vmbase + 0x1000) = (uvlong)(vmbase + 0x00002003); // points to PML3
+	*(uvlong *)(vmbase + 0x2000) = 0x00000083; // points to first GiB
+	}
 	runloop();
 	return 0;
 }

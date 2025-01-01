@@ -322,8 +322,9 @@ threadmain(int argc, char **argv)
 	int i, j;
 	Channel *c;
 	uvlong forever = 0;
+	extern void to64(void);
 
-	test = 6;
+	test = 7;
 	ARGBEGIN{
 	case 'q':
 		quiet = 1;
@@ -407,6 +408,14 @@ threadmain(int argc, char **argv)
 				exits("vmthreadcreate failed");
 			}
 			break;
+		case 7:
+			// test to64
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate ((void *)to64, (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			break;
+
 		case -1:
 			i = 221;
 			c = vmthreadchan(sizeof(ulong), buffer);
