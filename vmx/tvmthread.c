@@ -225,7 +225,7 @@ network(void *arg)
 	vmcall((uvlong)fcall,(uvlong)print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
 	fd = vmcall((uvlong)syscall,OPEN, "/net/cs", 2, 0, 0);
 	vmcall((uvlong)fcall,(uvlong)print, "fd is %p\n", (uvlong)fd, 0, 0);
-	amt = vmcall((uvlong)syscall,_WRITE, (void *)fd, (uvlong)addr, sizeof(addr)-1,  0);
+	amt = vmcall((uvlong)syscall,_WRITE, (void *)fd, (uvlong)addr, strlen(addr),  0);
 	vmcall((uvlong)fcall,(uvlong)print, "amt is %p\n", (uvlong)amt, 0, 0);
 	memset(buf, 0, sizeof(buf));
 	amt = vmcall((uvlong)syscall,_READ, (void *)fd, (uvlong)buf, sizeof(buf)-1, 0);
