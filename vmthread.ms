@@ -617,6 +617,23 @@ vmthreadcreate(setter, nil, 1024);
 .LP
 The VMThread is able to call, via a vmcall, a function in the host.
 .SH
+Extending the use of vmcall
+.LP
+Valid virtual user mode addresses in Plan 9 start at 2MiB and go up.
+This allows us to use the addresses in the 0-2MiB range for other operations.
+We currently divide this range as shown in the table below.
+.TS
+c s s s
+c c c
+l l l.
+vmcall opcodes and arguments
+opcode	arguments	function
+0-127	None	Print the argument to stdout
+0x1000	None	Print registers and the first 2MiB of page table mappings
+0x2000-0x2fff	[arg0, arg1, ...]	Call syscall number (opcode-0x2000), with the args
+2MiB and up	[arg0, arg1, ...]	Call function pointer in arg0 with the  args	
+.TE
+.SH
 Running code in shared memory
 .LP
 Next we show the code which runs in the shared space.
@@ -653,7 +670,9 @@ void directcall(void *arg)
 	int fd;
 	USED(arg);
 	vmcall((uvlong)print, (uvlong)"direct call\n", 0, 0, 0);
-	fd = (int) vmcall((uvlong)open, (uvlong)"/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
+	fd = (int) vmcall((uvlong)open, 
+				(uvlong)"/net/icmp/clone", 
+				(uvlong)ORDWR,(uvlong) 0, 0);
 	vmcall((uvlong)print, (uvlong)"fd is %d\n", fd, 0, 0);
 	while(1);
 }
@@ -686,6 +705,25 @@ malware hides behind a virtualization wall, using the opacity of emulated device
 operations. 
 We can easily see what is going on behind the virtualization veil. 
 .SH
+Building driverless kernels
+.LP
+Going even further, we can run Plan 9 with no drivers at all.
+We can have a parameter to the kernel that indicates it is a driverless guest.
+Then, in the system call function, we can change just one line:
+.P1
+ret = systab[scallnr]((va_list)up->s.args);
+.P2
+to
+.P1
++if (nativesystemcalls)
+	ret = systab[scallnr]((va_list)up->s.args);
++else
++	ret = vmcall(scallnr+0x2000, (va_list)up->s.args);
+.P2
+The result is a guest kernel that needs no drivers at all.
+The guest kernel, instead of using, e.g., an emulated ethernet, graphics, or serial device, will function as a process does, calling system calls directly.
+This approach is very similar to Google's Gvisor software.
+.SH
 Conclusions and future work
 .LP
 We have described vmthreads, an extension to the 9front libthread, which allows guest virtual machines to run 
@@ -696,7 +734,11 @@ are copied, not shared. Stack is never shared or copied.
 .LP
 Future work includes exploring the model in its current state, to see how it might be used; and, going one step further
 and enabling full sharing of the data and bss segments.
-Finally, since the Go threading model derives directly from Plan 9, we will create a vmthreads package for Go.
+The idea of a driverless guest needs to be explored; replacing emulated devices
+with system calls should allow higher perfomance.
+Finally, since the Go threading model derives directly from Plan 9, we can create a
+vmthreads package for Go. So much of the Plan 9 model already exists in the Go runtime,
+it will mostly be a matter of adding the vmx device IO to a Go program.
 .SH
 References
 .LP
