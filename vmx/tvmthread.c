@@ -414,6 +414,9 @@ threadmain(int argc, char **argv)
 			if (vmthreadcreate ((void *)to64, (void *)0x1000000, 1024) < 0) {
 				exits("vmthreadcreate failed");
 			}
+			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)message), (void *)0x1000000, 1024) < 0) {
+				exits("second vmthreadcreate failed");
+			}
 			break;
 
 		case -1:

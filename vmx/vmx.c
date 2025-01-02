@@ -439,12 +439,13 @@ sleeperproc(void *)
 	}
 }
 
-static void
+static int
 runloop(void)
 {
 	char *waitmsg;
 	ulong ul;
 	VmxNotif notif;
+	int ret;
 
 	lock(&timerlock);
 	proccreate(waitproc, nil, 4096);
@@ -466,6 +467,8 @@ runloop(void)
 		case WAIT:
 			getexit--;
 			processexit(waitmsg);
+			if (state == VMEXIT)
+				return 0;
 			//free(waitmsg);
 			break;
 		case SLEEP:
@@ -476,6 +479,8 @@ runloop(void)
 			notif.f(notif.arg);
 			break;
 		}
+		if(getexit == 0 && state == VMEXIT)
+			return 0;
 		if(getexit == 0 && state == VMRUNNING)
 			launch();
 	}
@@ -708,6 +713,8 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 
 	//	*(uvlong *)(vmbase + 0x1000) = (uvlong)(vmbase + 0x00002003); // points to PML3
 	//*(uvlong *)(vmbase + 0x2000) = 0x00000083; // points to first GiB
-	runloop();
+	state = VMRUNNING;
+	runloop(); // TODO: see about returning errors from the vm itself.
+	print("VM exits\n");
 	return 0;
 }

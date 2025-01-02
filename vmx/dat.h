@@ -9,6 +9,7 @@ enum {
 	VMRUNNING,
 	VMHALT,
 	VMDEAD,
+	VMEXIT,
 };
 extern int state;
 extern int debug;

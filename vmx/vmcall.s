@@ -3,6 +3,7 @@
 TEXT vmcall(SB), $0
 	BYTE $0xf; BYTE $0x1; BYTE $0xc1
 	RET
+
 // from l.s
 MODE $32
 #define DELAY		BYTE $0xEB; BYTE $0x00	/* JMP .+2 */
@@ -87,24 +88,6 @@ TEXT _warp64<>(SB), 1, $-4
 	//HLT
 	/* all clearing of memory is removed; this is a vm and memory is already zerod. */
 
-#ifdef NONONO
-	MOVL	$0x1000000, SI // FIXME
-
-	MOVL	SI, AX				/* PML4 */
-	MOVL	AX, DX
-	ADDL	$(PTEACCESSED|PTEDIRTY|PTSZ|PTEWRITE|PTEVALID), DX	/* PDP at PML4 + PTSZ */
-	MOVL	DX, PML4O(0)(AX)		/* PML4E for ID map -- direct map EPT with page table */
-
-	ADDL	$PTSZ, AX			/* PDP at PML4 + PTSZ */
-	ADDL	$PTSZ, DX			/* PD0 at PML4 + 2*PTSZ */
-	// Set PTESIZE -- 1 GiB pages.
-	MOVL		$(PTEACCESSED|PTEDIRTY|PTESIZE|PTEWRITE|PTEVALID), DX
-	MOVL	DX, PDPO(0)(AX)			/* PDPE for double-map */
-	// This should not be needed?
-	//	ADDL	$PTSZ, AX			/* PD0 at PML4 + 2*PTSZ */
-	// MOVL	$(PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID), DX
-	// MOVL	DX, PDO(0)(AX)			/* PDE for ID map -- direct map EPT with page table */
-#endif
 /*
  * Enable and activate Long Mode. From the manual:
  * 	make sure Page Size Extentions are off, and Page Global
@@ -167,14 +150,16 @@ TEXT _start64v<>(SB), 1, $-4
 	WAVE('t')
 	MOVW	AX, LDTR
 
-_clearbss:
 	WAVE('e')
 	PUSHQ	AX				/* clear flags */
 	POPFQ
+arg:
 	WAVE('r')
-	HLT
+	// HLT
 	// vmcall
+	MOVL $0x1fffff, BP // max non-valid address means we are done.'
 	BYTE $0xf; BYTE $0x1; BYTE $0xc1
+	JMP arg
 	RET
 
 	BYTE $0xf; BYTE $0x1; BYTE $0xc1

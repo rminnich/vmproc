@@ -482,7 +482,12 @@ dovmcall(ExitInfo *ei)
 		print("PTES: %p@%p, %p@%p\n", vmbase+0x2000, *(uvlong*)(vmbase+2000), vmbase+0x2008, *(uvlong*)(vmbase+0x2008));
 		goto done;
 	}
-	sp = (uvlong *)(rget(RSP)+4); // ignore 32 bits from call to vmcall
+	if ((uvlong)f == 0x1fffff) {
+		out = 0;
+		state = VMEXIT;
+		goto done;
+	}
+	sp = (uvlong *)(rget(RSP)+8); // ignore 64 bits from call to vmcall
 	args[0] = sp[1];
 	args[1] = sp[2];
 	args[2] = sp[3];
