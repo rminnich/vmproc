@@ -324,7 +324,7 @@ threadmain(int argc, char **argv)
 	uvlong forever = 0;
 	extern void to64(void);
 
-	test = 7;
+	test = 8;
 	ARGBEGIN{
 	case 'q':
 		quiet = 1;
@@ -415,6 +415,16 @@ threadmain(int argc, char **argv)
 				exits("vmthreadcreate failed");
 			}
 			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)message), (void *)0x1000000, 1024) < 0) {
+				exits("second vmthreadcreate failed");
+			}
+			break;
+
+		case 8:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate ((void *)to64, (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)network), (void *)0x1000000, 1024) < 0) {
 				exits("second vmthreadcreate failed");
 			}
 			break;

@@ -17,6 +17,25 @@ function call signature is identical to
 Currently,
 VMThreads requires no kernel changes.
 .LP
+Traditional virtualization systems are designed to run heavyweight guest OS images, usually a 
+Linux or Windows distribution, including a disk image.
+Their disk activity is visible only as a set of IO operations on a virtual disk, not 
+operations in a file system.
+Guest VMs are frequently accessed over an emulated network connection, as though they
+were an entirely independent system.
+In contrast, VMThreads allows users to run virtual machines at the granularity of a 
+machine instruction; a function; a set of functions comprising a driver; or a kernel.
+Because the guest VM is created as a thread, it is easy to share data structures with it.
+Threads outside the VM thread can examine and control the guest behavior, allowing
+a level of debugging that might otherwise require hardware support.
+Because the VM is visible to the kernel as a process, standard process management
+tools can be used to study its behavior. 
+Further, it is possible to implement a driver-less kernel, i.e. one which uses system
+calls, not low-level IO operations, and monitor the VMs use
+of network, disk, and other resources 
+directly, rather than trying to reconstruct its activity from its use of emulated
+devices.
+.LP
 While the VMs as threads model is very simple, it is as capable as more complex systems:
 we first implemented VMThreads in the Akaros research kernel, and
 showed that it could support the Google production kernel stack as a guest. 
