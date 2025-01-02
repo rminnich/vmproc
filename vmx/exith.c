@@ -7,6 +7,7 @@
 
 int persist = 1;
 extern int debug;
+extern u8int *vmbase;
 
 typedef struct ExitInfo ExitInfo;
 struct ExitInfo {
@@ -195,7 +196,8 @@ cpuid(ExitInfo *ei)
 	cp = getcpuid(ax, cx);
 	switch(ax){
 	case 0x00: /* highest register & GenuineIntel */
-		ax = MIN(cpuidmax, 0x18);
+#define MMIN(a, b)	((a) < (b)? (a): (b))
+		ax = MMIN(cpuidmax, 0x18);
 		bx = cp.bx;
 		dx = cp.dx;
 		cx = cp.cx;
@@ -462,6 +464,7 @@ xsetbv(ExitInfo *ei)
 static void
 dovmcall(ExitInfo *ei)
 {
+	uvlong dumpregs(void);
 	uvlong (*f)(...);
 	uvlong out;
 	uvlong args[4];
@@ -469,19 +472,25 @@ dovmcall(ExitInfo *ei)
 	f = (void *)rget(RBP);
 	// Special vmcalls that we handle right here. For now.
 	if ((uvlong)f < 128) {
-		print("%c", (char)f);
-		rset(RAX, 1);
-		skipinstr(ei);
-		return;
+		print("%c", (char)(uvlong)f);
+		out = 1;
+		goto done;
+	}
+	if ((uvlong)f == 0x1000) {
+		out = dumpregs();
+		print("PTES: %p@%p, %p@%p\n", vmbase, *(uvlong*)vmbase, vmbase+0x1000, *(uvlong*)(vmbase+0x1000));
+		print("PTES: %p@%p, %p@%p\n", vmbase+0x2000, *(uvlong*)(vmbase+2000), vmbase+0x2008, *(uvlong*)(vmbase+0x2008));
+		goto done;
 	}
 	sp = (uvlong *)(rget(RSP)+4); // ignore 32 bits from call to vmcall
 	args[0] = sp[1];
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	if (debug > 1) print("VMCALL sp %p *sp, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	if (debug > 1) print("VMCALL sp %p *sp %p, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
 	out = f(args[0], args[1], args[2], args[3]);
-	if (debug > 1) print("...%d\n", out);
+	if (debug > 1) print("...%lld\n", out);
+done:
 	rset(RAX, out);
 	skipinstr(ei);
 }
@@ -509,6 +518,7 @@ static ExitType etypes[] = {
 void
 processexit(char *msg)
 {
+	uvlong dumpregs(void);
 	static char msgc[1024];
 	char *f[32];
 	int nf;
@@ -557,7 +567,10 @@ processexit(char *msg)
 		return;
 	}
 	if(persist){
-		vmerror("unknown exit: %s", msg);
+		vmerror("unknown exit: %s; going to VMDEAD state", msg);
+		dumpregs();
+		print("PTES: %p@%p, %p@%p\n", vmbase, *(uvlong*)vmbase, vmbase+0x1000, *(uvlong*)(vmbase+0x1000));
+		print("PTES: %p@%p, %p@%p\n", vmbase+0x2000, *(uvlong*)(vmbase+2000), vmbase+0x2008, *(uvlong*)(vmbase+0x2008));
 		state = VMDEAD;
 	}else
 		sysfatal("unknown exit: %s", msg);

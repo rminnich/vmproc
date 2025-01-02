@@ -4,6 +4,7 @@
 #include <draw.h>
 #include "dat.h"
 #include "fns.h"
+#include "mem.h"
 
 char *segname;
 int segrclose;
@@ -155,6 +156,20 @@ rcflush(int togo)
 	if(!togo && p != buf && write(regsfd, buf, p - buf) < p - buf)
 		sysfatal("rcflush: write: %r");
 	return p != buf ? buf : nil;
+}
+
+uvlong
+dumpregs(void)
+{
+	static char buf[4096];
+	int rc;
+
+	rcflush(0);
+	rc = pread(regsfd, buf, sizeof(buf) - 1, 0);
+	if(rc < 0) sysfatal("rcload: pread: %r");
+	buf[rc] = 0;
+	print("REGS:%s\n", buf);
+	return (uvlong)rc;
 }
 
 static void
@@ -673,9 +688,26 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 	print("Set cr3 %p\n", (vmbase + 0x1000));
 	rset("cr3", (uvlong)(vmbase + 0x1000));
 	}
-	*(uvlong *)(vmbase + 0x1000) = (uvlong)(vmbase + 0x00002003); // points to PML3
-	*(uvlong *)(vmbase + 0x2000) = 0x00000083; // points to first GiB
 
+    uvlong* pml4 = (uvlong*)vmbase;
+
+    uvlong* pml3 = (uvlong*)(vmbase + BY2PG);
+
+    uvlong* pml2 = (uvlong*)(vmbase + 2*BY2PG);
+
+    pml4[0] = (uvlong)pml3 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
+
+    pml3[0] = (uvlong)pml2 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
+
+    for (int i = 0; i < 512; i++) {
+        uvlong phys_addr = i * (1<<21); // 2 MiB increments
+        pml2[i] = phys_addr | PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID;
+    }
+	print("PTES: %p@%p, %p@%p\n", vmbase, *(uvlong*)vmbase, vmbase+0x1000, *(uvlong*)(vmbase+0x1000));
+	print("PTES: %p@%p, %p@%p\n", vmbase+0x2000, *(uvlong*)(vmbase+2000), vmbase+0x2008, *(uvlong*)(vmbase+0x2008));
+
+	//	*(uvlong *)(vmbase + 0x1000) = (uvlong)(vmbase + 0x00002003); // points to PML3
+	//*(uvlong *)(vmbase + 0x2000) = 0x00000083; // points to first GiB
 	runloop();
 	return 0;
 }

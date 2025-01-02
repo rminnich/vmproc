@@ -15,8 +15,7 @@ MODE $32
 // This code is a bashing together of l.s, minus things we know don't matter.
 // memory is zero, for example. Note: be careful about BP
 TEXT to64(SB), $0
-mov bp to si for pml4
-do the init in c, no need to set it up here.
+	MOVL RARG, SI
 	WAVE('P')
 
 
@@ -88,21 +87,24 @@ TEXT _warp64<>(SB), 1, $-4
 	//HLT
 	/* all clearing of memory is removed; this is a vm and memory is already zerod. */
 
+#ifdef NONONO
 	MOVL	$0x1000000, SI // FIXME
 
 	MOVL	SI, AX				/* PML4 */
 	MOVL	AX, DX
 	ADDL	$(PTEACCESSED|PTEDIRTY|PTSZ|PTEWRITE|PTEVALID), DX	/* PDP at PML4 + PTSZ */
-	MOVL	DX, PML4O(0)(AX)		/* PML4E for double-map */
+	MOVL	DX, PML4O(0)(AX)		/* PML4E for ID map -- direct map EPT with page table */
 
 	ADDL	$PTSZ, AX			/* PDP at PML4 + PTSZ */
 	ADDL	$PTSZ, DX			/* PD0 at PML4 + 2*PTSZ */
+	// Set PTESIZE -- 1 GiB pages.
+	MOVL		$(PTEACCESSED|PTEDIRTY|PTESIZE|PTEWRITE|PTEVALID), DX
 	MOVL	DX, PDPO(0)(AX)			/* PDPE for double-map */
-
-	ADDL	$PTSZ, AX			/* PD0 at PML4 + 2*PTSZ */
-	MOVL	$(PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID), DX
-	MOVL	DX, PDO(0)(AX)			/* PDE for double-map */
-
+	// This should not be needed?
+	//	ADDL	$PTSZ, AX			/* PD0 at PML4 + 2*PTSZ */
+	// MOVL	$(PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID), DX
+	// MOVL	DX, PDO(0)(AX)			/* PDE for ID map -- direct map EPT with page table */
+#endif
 /*
  * Enable and activate Long Mode. From the manual:
  * 	make sure Page Size Extentions are off, and Page Global
@@ -116,6 +118,7 @@ TEXT _lme<>(SB), 1, $-4
 	MOVL	SI, CR3				/* load the mmu */
 	DELAY
 	WAVE('f')
+	WAVE(0x1000) // This will dump state.
 	//HLT
 
 	MOVL	CR4, AX
@@ -132,7 +135,7 @@ TEXT _lme<>(SB), 1, $-4
 
 	MOVL	CR0, DX
 	ANDL	$~0x6000000a, DX
-	ORL	$0x80010000, DX			/* Paging Enable, Write Protect */
+	ORL	$0x80000000, DX			/* Paging Enable */
 	MOVL	DX, CR0
 	WAVE('m')
 
