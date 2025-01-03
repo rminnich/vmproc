@@ -1,0 +1,9 @@
+./6.tvmthread 
+ratrace -c ./6.tvmthread -t 1
+./6.tvmthread -t 4
+mk test
+slay 6.tvmthread | rc
+hexdump '#g/sn.1000000.5000000'/data
+
+slay hexdump | rc
+nm -n 6.tvmthread
