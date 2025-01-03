@@ -732,7 +732,7 @@ Building driverless kernels
 .LP
 Going even further, we can run Plan 9 with no drivers at all.
 We can have a parameter to the kernel that indicates it is a driverless guest.
-Then, in the system call function, we can change just one line:
+For system calls, in the system call function, we can change just one line:
 .P1
 ret = systab[scallnr]((va_list)up->s.args);
 .P2
@@ -743,9 +743,13 @@ to
 +else
 +	ret = vmcall(scallnr+0x2000, (va_list)up->s.args);
 .P2
+.LP
 The result is a guest kernel that needs no drivers at all.
 The guest kernel, instead of using, e.g., an emulated ethernet, graphics, or serial device, will function as a process does, calling system calls directly.
 This approach is very similar to Google's Gvisor software.
+.LP
+Note that this can support programs only, and at present, would not support kernel
+functions that use, e.g., open (exec). But it is a start.
 .SH
 Conclusions and future work
 .LP
