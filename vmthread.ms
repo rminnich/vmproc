@@ -23,8 +23,12 @@ Their disk activity is visible only as a set of IO operations on a virtual disk,
 operations in a file system.
 Guest VMs are frequently accessed over an emulated network connection, as though they
 were an entirely independent system.
+.LP
 In contrast, VMThreads allows users to run virtual machines at the granularity of a 
-machine instruction; a function; a set of functions comprising a driver; or a kernel.
+machine instruction;
+.FS
+For example, we used a single-instruction VM guest to debug our vmcall support.
+.FE a function; a set of functions comprising a driver; or a kernel.
 Because the guest VM is created as a thread, it is easy to share data structures with it.
 Threads outside the VM thread can examine and control the guest behavior, allowing
 a level of debugging that might otherwise require hardware support.

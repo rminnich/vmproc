@@ -217,9 +217,9 @@ network(void *arg)
 {
 	USED(arg);
 	extern uvlong vmcall(uvlong,uvlong,void *,uvlong,uvlong, uvlong);
-	int fd;
+	int fd, cfd;
 	char *addr = "icmp!127.1!1";
-	char buf[256];
+	char buf[256], cmd[256], id[256], clone[256];
 	static uvlong amt;
 	vprint(1, "addr is %s\n", addr);
 	vmcall((uvlong)fcall,(uvlong)print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
@@ -233,6 +233,14 @@ network(void *arg)
 	fd = (int)vmcall((uvlong)syscall, OPEN, "/net/icmp/clone", (uvlong)ORDWR,(uvlong) 0, 0);
 	vmcall((uvlong)fcall, (uvlong)print,"NOTDIRECT:fd is %lld\n", fd, 0, 0);
 	vmcall((uvlong)print, (uvlong)"DIRECT: fd is %lld\n", (void *)fd, 0, 0, 0);
+	memset(id, 0, sizeof(id));
+	vmcall((uvlong)syscall,_READ, (void *)fd, (uvlong)id, sizeof(id)-1, 0);
+	vmcall((uvlong)print, (uvlong)"id %s\n", cmd, (uvlong)id, 0, 0);
+	sprint(cmd, "connect %s", buf);
+	amt = vmcall((uvlong)syscall,_WRITE, (void *)fd, (uvlong)cmd, strlen(cmd),  0);
+	vmcall((uvlong)print, (uvlong)"cmd:%s, clone %s, cmd write %d\n", cmd, (uvlong)clone, amt, 0);
+
+
 	while (1);
 }
 
