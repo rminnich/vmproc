@@ -1,4 +1,5 @@
 #!/bin/rc
-bind -bc vmx /sys/src/libthread
+bind -bc libthread /sys/src/libthread
+bind -bc vmx /sys/src/cmd/vmx
 bind -bc pc /sys/src/9/pc
 bind -bc pc64 /sys/src/9/pc64
