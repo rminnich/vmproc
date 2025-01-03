@@ -451,6 +451,51 @@ xsetbv(ExitInfo *ei)
 	}
 }
 
+static void
+dovmcall(ExitInfo *ei)
+{
+	uvlong dumpregs(void);
+	uvlong (*f)(...);
+	uvlong out;
+	uvlong args[4];
+	uvlong *sp;
+	f = (void *)rget(RBP);
+	// Special vmcalls that we handle right here. For now.
+	if ((uvlong)f < 128) {
+		print("%c", (char)(uvlong)f);
+		out = 1;
+		goto done;
+	}
+	if ((uvlong)f == 0x1000) {
+		extern int regsfd;
+		int rc;
+		char buf[256];
+		rcflush(0);
+		rc = pread(regsfd, buf, sizeof(buf) - 1, 0);
+		if(rc < 0) sysfatal("rcload: pread: %r");
+		buf[rc] = 0;
+		print("REGS:%s\n", buf);
+		out = (uvlong)rc;
+		goto done;
+	}
+	if ((uvlong)f == 0x1fffff) {
+		out = 0;
+		// This is an exit, but let's ask 9front. state = VMEXIT;
+		goto done;
+	}
+	sp = (uvlong *)(rget(RSP)+8); // ignore 64 bits from call to vmcall
+	args[0] = sp[1];
+	args[1] = sp[2];
+	args[2] = sp[3];
+	args[3] = sp[4];
+	//if (debug > 1) print("VMCALL sp %p *sp %p, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	out = f(args[0], args[1], args[2], args[3]);
+	//if (debug > 1) print("...%lld\n", out);
+done:
+	rset(RAX, out);
+	skipinstr(ei);
+}
+
 typedef struct ExitType ExitType;
 struct ExitType {
 	char *name;
@@ -468,6 +513,7 @@ static ExitType etypes[] = {
 	{"#db", dbgexc},
 	{"movcr", movcr},
 	{".xsetbv", xsetbv},
+	{".vmcall", dovmcall},
 };
 
 void
