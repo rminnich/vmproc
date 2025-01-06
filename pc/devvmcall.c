@@ -45,7 +45,7 @@ vmcallattach(char *spec)
 static Walkqid*
 vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
-	return devwalk(c, nc, name, nname, vmcalldir, nelem(vmcalldir), vmcallgen);
+	error("notyet");
 }
 
 static int
@@ -102,7 +102,7 @@ outch(int c)
 }
 
 Dev vmcalldevtab = {
-	'L',
+	'V',
 	"vmcall",
 
 	devreset,
