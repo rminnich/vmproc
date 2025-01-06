@@ -3,6 +3,7 @@
 #include "dat.h"
 #include "fns.h"
 #include "x86.h"
+#include "/sys/src/libc/9syscall/sys.h"
 
 int persist = 1;
 
@@ -451,6 +452,23 @@ xsetbv(ExitInfo *ei)
 	}
 }
 
+static uvlong sys(uvlong cmd)
+{
+	uvlong args[4];
+	uvlong *sp;
+	sp = (uvlong *)(rget(RSP)+8); // ignore 64 bits from call to vmcall
+	args[0] = sp[1];
+	args[1] = sp[2];
+	args[2] = sp[3];
+	args[3] = sp[4];
+	switch (cmd & 0xff) {
+		default:
+			return 0;
+		case STAT:
+			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
+	}
+}
+
 static void
 dovmcall(ExitInfo *ei)
 {
@@ -459,14 +477,16 @@ dovmcall(ExitInfo *ei)
 	uvlong out;
 	uvlong args[4];
 	uvlong *sp;
+	uvlong cmd;
 	f = (void *)rget(RBP);
+	cmd = (uvlong)f;
 	// Special vmcalls that we handle right here. For now.
-	if ((uvlong)f < 128) {
+	if (cmd < 128) {
 		print("%c", (char)(uvlong)f);
 		out = 1;
 		goto done;
 	}
-	if ((uvlong)f == 0x1000) {
+	if (cmd == 0x1000) {
 		extern int regsfd;
 		int rc;
 		char buf[256];
@@ -478,7 +498,12 @@ dovmcall(ExitInfo *ei)
 		out = (uvlong)rc;
 		goto done;
 	}
-	if ((uvlong)f == 0x1fffff) {
+	if (cmd > 0x2000 && cmd < 0x2100) {
+		// call a syscall
+		out = sys(cmd);
+		goto done;
+	}
+	if (cmd == 0x1fffff) {
 		out = 0;
 		// This is an exit, but let's ask 9front. state = VMEXIT;
 		goto done;
