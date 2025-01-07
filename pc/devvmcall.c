@@ -67,10 +67,21 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	}
 	wq->clone = nc;
 
+	int sz = strlen(c->path->s+2);
+	for(j = 0; j<nname;j++) {
+		sz += strlen(name[j])+1;
+	}
+	char *nm = mallocz(sz, 1);
+	strcpy(nm, c->path->s);
 	// The vmcall support is doing all the checking. We just let it
 	// do all the parsing. We'll preserve the component-at-a-time
 	// walk for now.
 	for(j=0; j<nname; j++){
+		uvlong ret = vmcall(STAT, nm, d, dlen);
+	if (ret < 0) {
+		error("STAT failed");
+	}
+
 		STAT
 		CONVM2D
 		figure out qid
