@@ -18,19 +18,6 @@ Dirtab vmcalldir[]={
 	".",	{Qdir, 0, QTDIR},	0,	DMDIR|0555,
 };
 
-static int
-vmcallgen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
-{
-	Qid qid;
-
-	if(i == DEVDOTDOT){
-		mkqid(&qid, Qdir, 0, QTDIR);
-		devdir(c, qid, ".", 0, eve, 0555, dp);
-		return 1;
-	}
-	return 1;
-}
-
 static Chan*
 vmcallattach(char *spec)
 {
@@ -42,19 +29,20 @@ vmcallattach(char *spec)
 	return c;
 }
 
+// stateless walk.
+// The QID is going to be a pointer to the allocate string with the full
+// name. open, and stat, etc. will just use the name. done.
 static Walkqid*
 vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
-	int i, j, alloc;
+	int j, alloc;
 	Walkqid *wq;
-	char *n;
-	Dir dir;
 
 	if(nname > 0)
 		isdir(c);
 
 	alloc = (nc == nil);
-	wq = smalloc(sizeof(Walkqid)+(nname-1)*sizeof(Qid));
+	wq = smalloc(sizeof(Walkqid)+1*sizeof(Qid));
 	if(waserror()){
 		if(alloc && wq->clone != nil)
 			cclose(wq->clone);
@@ -73,82 +61,16 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	}
 	char *nm = mallocz(sz, 1);
 	strcpy(nm, c->path->s);
-	// The vmcall support is doing all the checking. We just let it
-	// do all the parsing. We'll preserve the component-at-a-time
-	// walk for now.
-	for(j=0; j<nname; j++){
-		uvlong ret = vmcall(STAT, nm, d, dlen);
-	if (ret < 0) {
-		error("STAT failed");
+	for(j = 0; j<nname;j++) {
+		strcat(nm, name[j]);
 	}
 
-		STAT
-		CONVM2D
-		figure out qid
-		add it to array
-		continue.
-
-		if(!(nc->qid.type&QTDIR)){
-			if(j==0)
-				error(Enotdir);
-			goto Done;
-		}
-		n = name[j];
-		if(strcmp(n, ".") == 0){
-    Accept:
-			wq->qid[wq->nqid++] = nc->qid;
-			continue;
-		}
-		if(strcmp(n, "..") == 0){
-			if((*gen)(nc, nil, tab, ntab, DEVDOTDOT, &dir) != 1){
-				print("devgen walk .. in dev%s %llux broken\n",
-					devtab[c->type]->name, c->qid.path);
-				error("broken devgen");
-			}
-			nc->qid = dir.qid;
-			goto Accept;
-		}
-		/*
-		 * Ugly problem: If we're using devgen, make sure we're
-		 * walking the directory itself, represented by the first
-		 * entry in the table, and not trying to step into a sub-
-		 * directory of the table, e.g. /net/net. Devgen itself
-		 * should take care of the problem, but it doesn't have
-		 * the necessary information (that we're doing a walk).
-		 */
-		if(gen==devgen && nc->qid.path!=tab[0].qid.path)
-			goto Notfound;
-		for(i=0;; i++) {
-			switch((*gen)(nc, n, tab, ntab, i, &dir)){
-			case -1:
-			Notfound:
-				if(j == 0)
-					error(Enonexist);
-				kstrcpy(up->errstr, Enonexist, ERRMAX);
-				goto Done;
-			case 0:
-				continue;
-			case 1:
-				if(strcmp(n, dir.name) == 0){
-					nc->qid = dir.qid;
-					goto Accept;
-				}
-				continue;
-			}
-		}
-	}
-	/*
-	 * We processed at least one name, so will return some data.
-	 * If we didn't process all nname entries succesfully, we drop
-	 * the cloned channel and return just the Qids of the walks.
-	 */
-Done:
 	poperror();
-	if(wq->nqid < nname){
-		if(alloc)
-			cclose(wq->clone);
-		wq->clone = nil;
-	}else if(wq->clone != nil){
+
+	wq->nqid = 1;
+	wq->qid[0].path = (uvlong) nm;
+
+	if(wq->clone != nil){
 		/* attach cloned channel to same device */
 		wq->clone->type = c->type;
 	}
@@ -158,7 +80,6 @@ Done:
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
-call DIRSTAT here -- make it 120
 	uvlong ret = vmcall(STAT, c->path->s, dp, n);
 	return (int)ret;
 }
@@ -167,7 +88,7 @@ static Chan*
 vmcallopen(Chan *c, int omode)
 {
 	uvlong ret = vmcall(OPEN, c->path->s, omode);
-	if (ret < 0) {
+	if ((int)ret < 0) {
 		error("vmcallopen failed");
 	}
 	c->dev = ret;
