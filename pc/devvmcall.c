@@ -106,7 +106,7 @@ vmcallcreate(Chan*, char*, int, ulong)
 static void
 vmcallclose(Chan *c)
 {
-	error("vmcallclose");
+	print("vmcallclose\n");
 	int ret = (int)vmcall(CLOSE, c->dev);
 	if (ret < 0) {
 		error("vmcallclose");
