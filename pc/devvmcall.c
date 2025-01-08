@@ -30,19 +30,22 @@ vmcallattach(char *spec)
 }
 
 // stateless walk.
-// The QID is going to be a pointer to the allocate string with the full
-// name. open, and stat, etc. will just use the name. done.
+// We will only walk one component at a time, and let the code in chan.c pick
+// up the mess.
 static Walkqid*
 vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
-	int j, alloc;
+	int alloc;
 	Walkqid *wq;
+	char *dp[128]; // for now.
+	Dir *d;
 
+	print("vmcallwalk, nname %d\n", nname);
 	if(nname > 0)
 		isdir(c);
 
 	alloc = (nc == nil);
-	wq = smalloc(sizeof(Walkqid)+1*sizeof(Qid));
+	wq = smalloc(sizeof(Walkqid)+nname*sizeof(Qid));
 	if(waserror()){
 		if(alloc && wq->clone != nil)
 			cclose(wq->clone);
@@ -54,22 +57,28 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		nc->type = 0;	/* device doesn't know about this channel yet */
 	}
 	wq->clone = nc;
+	for(j = 0; j < nnames; j++) {
+	uvlong ret = vmcall(STAT, names[j], dp, sizeof(dp));
+	convM2D(dp, sizeof(dp), &d, nil);
+	pull out the dir info and set the qid. then move on.
 
-	int sz = strlen(c->path->s+2);
-	for(j = 0; j<nname;j++) {
-		sz += strlen(name[j])+1;
-	}
+	/* We store the full path in q->qid->path, if it is empty, this is our
+	 * first time.
+	 */
+	char *p = (void *)c->qid.path;
+	
+	int sz = ((p != nil) ? strlen(p): 0) + strlen(name[1]) + 2;
 	char *nm = mallocz(sz, 1);
-	strcpy(nm, c->path->s);
-	for(j = 0; j<nname;j++) {
-		strcat(nm, name[j]);
-	}
+	strcpy(nm, p);
+	strcat(nm, "/");
+	strcat(nm, name[0]);
 
+	print("nm %p %s\n", nm, nm);
 	poperror();
 
-	wq->nqid = 0; // 1
+	wq->nqid = 1;
 	wq->qid[0].path = (uvlong) nm;
-
+	print("qid is %p path is %p\n", &wq->qid[0], nm);
 	if(wq->clone != nil){
 		/* attach cloned channel to same device */
 		wq->clone->type = c->type;
@@ -80,8 +89,18 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
-	error("vmcallstat");
-	uvlong ret = vmcall(STAT, c->path->s, dp, n);
+	print("vmcallstat chan %p qid %p, c->qid.path %p", c, &c->qid, c->qid.path);
+	error("fuck");
+	void *p = (void*)c->qid.path;
+	if (p == nil)
+		error("vmcallstat: nil");
+	if ((uvlong)p < 0x2000000) {
+		print("p %p\n", p);
+		error("bad p");
+	}
+	print("vmcallstat name %p\n", p);
+	uvlong ret = vmcall(STAT, p, dp, n);
+	print("vmcallstat %s %#llx\n", p, ret);
 	return (int)ret;
 }
 
