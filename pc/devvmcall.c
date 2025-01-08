@@ -67,7 +67,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 
 	poperror();
 
-	wq->nqid = 1;
+	wq->nqid = 0; // 1
 	wq->qid[0].path = (uvlong) nm;
 
 	if(wq->clone != nil){
@@ -80,6 +80,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
+	error("vmcallstat");
 	uvlong ret = vmcall(STAT, c->path->s, dp, n);
 	return (int)ret;
 }
@@ -87,6 +88,7 @@ vmcallstat(Chan *c, uchar *dp, int n)
 static Chan*
 vmcallopen(Chan *c, int omode)
 {
+	error("vmcallopen");
 	uvlong ret = vmcall(OPEN, c->path->s, omode);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
@@ -104,6 +106,7 @@ vmcallcreate(Chan*, char*, int, ulong)
 static void
 vmcallclose(Chan *c)
 {
+	error("vmcallclose");
 	int ret = (int)vmcall(CLOSE, c->dev);
 	if (ret < 0) {
 		error("vmcallclose");
@@ -113,6 +116,7 @@ vmcallclose(Chan *c)
 static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
+	error("vmcallread");
 	uvlong ret = vmcall(PREAD, c->dev, a, n, off);
 	return (long)ret;
 }
@@ -120,15 +124,11 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
+	error("vmcallwrite");
 	uvlong ret = vmcall(PWRITE, c->dev, a, n, off);
 	return (long)ret;
 }
 
-static void
-outch(int c)
-{
-	vmcall((uvlong)(char)c);
-}
 
 Dev vmcalldevtab = {
 	'V',
