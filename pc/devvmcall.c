@@ -37,48 +37,68 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
 	int alloc;
 	Walkqid *wq;
-	char *dp[128]; // for now.
-	Dir *d;
+	uchar dp[128]; // for now.
+	Dir d;
+	int nqid, j;
+	int fullpathlen = 2;
 
-	print("vmcallwalk, nname %d\n", nname);
+	print("vmcallwalk, nname %d:", nname);
+	for (j = 0; j < nname; j++){
+		print("/%s", name[j]);
+		fullpathlen += strlen(name[j])+1;
+	}
+	print("\n");
+	print("again, nname %d\n", nname);
 	if(nname > 0)
 		isdir(c);
 
+	print("nc %p\n", nc);
+	if (nname>0) error("fuck");
 	alloc = (nc == nil);
+	print("alloc %d\n", alloc);
 	wq = smalloc(sizeof(Walkqid)+nname*sizeof(Qid));
 	if(waserror()){
+		if(0)
 		if(alloc && wq->clone != nil)
 			cclose(wq->clone);
+		if(0)
 		free(wq);
 		return nil;
 	}
+	print("wq %p\n", wq);
 	if(alloc){
 		nc = devclone(c);
 		nc->type = 0;	/* device doesn't know about this channel yet */
 	}
+	print("devcloned nname %d nc %p wq %p\n", nname, nc, wq);
+	if (nname>0) error("fuck");
 	wq->clone = nc;
-	for(j = 0; j < nnames; j++) {
-	uvlong ret = vmcall(STAT, names[j], dp, sizeof(dp));
-	convM2D(dp, sizeof(dp), &d, nil);
-	pull out the dir info and set the qid. then move on.
-
-	/* We store the full path in q->qid->path, if it is empty, this is our
-	 * first time.
-	 */
-	char *p = (void *)c->qid.path;
-	
-	int sz = ((p != nil) ? strlen(p): 0) + strlen(name[1]) + 2;
+	print("before for\n");
+	for(nqid = 0; nqid < nname; nqid++) {
+		print("vmstat %s\n", name[j]);
+		uvlong ret = vmcall(0x2000|STAT, name[j], dp, sizeof(dp));
+		if ((int)ret < 0)
+			break;
+		print("convM2d?\n");
+		convM2D(dp, sizeof(dp), &d, nil);
+		wq->qid[nqid] = d.qid;
+	}
+	print("after for nqid %d\n", nqid);
+	if (nname > 0)
+	error("fuck");
+	int sz = 1 /* for / */ + fullpathlen + 2;
+	print("sz %d\n", sz);
 	char *nm = mallocz(sz, 1);
-	strcpy(nm, p);
+	print("nm is %p\n", nm);
 	strcat(nm, "/");
-	strcat(nm, name[0]);
+	for(j = 0; j < nname; j++)
+		strcat(nm, name[j]);
 
 	print("nm %p %s\n", nm, nm);
 	poperror();
-
-	wq->nqid = 1;
-	wq->qid[0].path = (uvlong) nm;
-	print("qid is %p path is %p\n", &wq->qid[0], nm);
+	print("after poperror");
+	wq->nqid = nqid;
+	//wq->qid[0].path = (uvlong) nm;
 	if(wq->clone != nil){
 		/* attach cloned channel to same device */
 		wq->clone->type = c->type;
@@ -89,17 +109,9 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
-	print("vmcallstat chan %p qid %p, c->qid.path %p", c, &c->qid, c->qid.path);
-	error("fuck");
-	void *p = (void*)c->qid.path;
-	if (p == nil)
-		error("vmcallstat: nil");
-	if ((uvlong)p < 0x2000000) {
-		print("p %p\n", p);
-		error("bad p");
-	}
+	char *p = "/";
 	print("vmcallstat name %p\n", p);
-	uvlong ret = vmcall(STAT, p, dp, n);
+	uvlong ret = vmcall(0x2000|STAT, p, dp, n);
 	print("vmcallstat %s %#llx\n", p, ret);
 	return (int)ret;
 }
@@ -108,7 +120,7 @@ static Chan*
 vmcallopen(Chan *c, int omode)
 {
 	error("vmcallopen");
-	uvlong ret = vmcall(OPEN, c->path->s, omode);
+	uvlong ret = vmcall(0x2000|OPEN, c->path->s, omode);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
 	}
@@ -126,7 +138,7 @@ static void
 vmcallclose(Chan *c)
 {
 	print("vmcallclose\n");
-	int ret = (int)vmcall(CLOSE, c->dev);
+	int ret = (int)vmcall(0x2000|CLOSE, c->dev);
 	if (ret < 0) {
 		error("vmcallclose");
 	}
@@ -136,7 +148,7 @@ static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallread");
-	uvlong ret = vmcall(PREAD, c->dev, a, n, off);
+	uvlong ret = vmcall(0x2000|PREAD, c->dev, a, n, off);
 	return (long)ret;
 }
 
@@ -144,7 +156,7 @@ static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallwrite");
-	uvlong ret = vmcall(PWRITE, c->dev, a, n, off);
+	uvlong ret = vmcall(0x2000|PWRITE, c->dev, a, n, off);
 	return (long)ret;
 }
 
