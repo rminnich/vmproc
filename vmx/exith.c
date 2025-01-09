@@ -461,6 +461,7 @@ static uvlong sys(uvlong cmd)
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
+	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
 			return 0;

@@ -76,7 +76,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	print("before for\n");
 	for(nqid = 0; nqid < nname; nqid++) {
 		print("vmstat %s\n", name[j]);
-		uvlong ret = vmcall(0x2000|STAT, name[j], dp, sizeof(dp));
+		uvlong ret = vmcall(0x2000|STAT, name[j], PADDR(dp), sizeof(dp));
 		if ((int)ret < 0)
 			break;
 		print("convM2d?\n");
@@ -111,7 +111,7 @@ vmcallstat(Chan *c, uchar *dp, int n)
 {
 	char *p = "/";
 	print("vmcallstat name %p\n", p);
-	uvlong ret = vmcall(0x2000|STAT, p, dp, n);
+	uvlong ret = vmcall(0x2000|STAT, PADDR(p), PADDR(dp), n);
 	print("vmcallstat %s %#llx\n", p, ret);
 	return (int)ret;
 }
@@ -120,7 +120,7 @@ static Chan*
 vmcallopen(Chan *c, int omode)
 {
 	error("vmcallopen");
-	uvlong ret = vmcall(0x2000|OPEN, c->path->s, omode);
+	uvlong ret = vmcall(0x2000|OPEN, PADDR(c->path->s), omode);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
 	}
@@ -148,7 +148,7 @@ static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallread");
-	uvlong ret = vmcall(0x2000|PREAD, c->dev, a, n, off);
+	uvlong ret = vmcall(0x2000|PREAD, c->dev, PADDR(a), n, off);
 	return (long)ret;
 }
 
@@ -156,7 +156,7 @@ static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallwrite");
-	uvlong ret = vmcall(0x2000|PWRITE, c->dev, a, n, off);
+	uvlong ret = vmcall(0x2000|PWRITE, c->dev, PADDR(a), n, off);
 	return (long)ret;
 }
 
