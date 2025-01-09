@@ -470,6 +470,25 @@ static uvlong sys(uvlong cmd)
 	}
 }
 
+// Vec MUST be 8 entries
+static uvlong ksys(uvlong *sp)
+{
+	uvlong cmd;
+	cmd = sp[0];
+	uvlong args[4];
+	args[0] = sp[1];
+	args[1] = sp[2];
+	args[2] = sp[3];
+	args[3] = sp[4];
+	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
+	switch (cmd & 0xff) {
+		default:
+			return 0;
+		case STAT:
+			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
+	}
+}
+
 static void
 dovmcall(ExitInfo *ei)
 {
@@ -502,6 +521,10 @@ dovmcall(ExitInfo *ei)
 	if (cmd > 0x2000 && cmd < 0x2100) {
 		// call a syscall
 		out = sys(cmd);
+		goto done;
+	}
+	if (cmd & 0x8000000000000000) {
+		out = ksys((uvlong *)(cmd&~0x8000000000000000));
 		goto done;
 	}
 	if (cmd == 0x1fffff) {
