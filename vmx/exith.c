@@ -474,6 +474,7 @@ static uvlong sys(uvlong cmd)
 static uvlong ksys(uvlong *sp)
 {
 	uvlong cmd;
+	print("ksys: sp %p\n", sp);
 	cmd = sp[0];
 	uvlong args[4];
 	args[0] = sp[1];

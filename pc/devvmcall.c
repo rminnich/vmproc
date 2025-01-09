@@ -18,18 +18,22 @@ Dirtab vmcalldir[]={
 	".",	{Qdir, 0, QTDIR},	0,	DMDIR|0555,
 };
 
-static uvlong vmcallargs(uvlong *vec, uvlong scallno, ...)
+static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
 {
 	va_list ap;
 	uvlong val;
 	int i = 1;
 
-	va_start(ap, scallno);
+	print("vmcallargs: start vec %p \n", vec);
+	va_start(ap, narg);
 	vec[0] = scallno;
-	while ((val = va_arg(ap, uvlong)) != 0) {
-		vec[i++] = val;
+	print("vmcallargs: scallno %#llx\n", scallno);
+	for(i = 1; i < narg+1; i++) {
+		print("vmcallargs: add arg %d, val %#llx\n", i, val);
+		vec[i] = val;
 	}
 	va_end(ap);
+	print("vmcallargs: return %p\n", PADDR(vec) | 0x8000000000000000);
 	return PADDR(vec) | 0x8000000000000000;
 }
 
@@ -92,7 +96,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	print("before for\n");
 	for(nqid = 0; nqid < nname; nqid++) {
 		print("vmstat %s\n", name[j]);
-		uvlong ret = vmcall(vmcallargs(vec, STAT, PADDR(name[j]), PADDR(dp), sizeof(dp)));
+		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(name[j]), PADDR(dp), sizeof(dp)));
 		if ((int)ret < 0)
 			break;
 		print("convM2d?\n");
@@ -128,7 +132,7 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	char *p = "/";
 	uvlong vec[8];
 	print("vmcallstat name %p\n", p);
-	uvlong ret = vmcall(vmcallargs(vec, STAT, PADDR(p), PADDR(dp), n));
+	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(dp), n));
 	print("vmcallstat %s %#llx\n", p, ret);
 	return (int)ret;
 }
@@ -138,7 +142,7 @@ vmcallopen(Chan *c, int omode)
 {
 	error("vmcallopen");
 	uvlong vec[8];
-	uvlong ret = vmcall(vmcallargs(vec, OPEN, PADDR(c->path->s), omode));
+	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(c->path->s), omode));
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
 	}
@@ -155,9 +159,11 @@ vmcallcreate(Chan*, char*, int, ulong)
 static void
 vmcallclose(Chan *c)
 {
-	print("vmcallclose\n");
 	uvlong vec[8];
-	int ret = (int)vmcall(vmcallargs(vec, CLOSE, c->dev));
+	print("vmcallclose\n");
+	if (! c)
+		return;
+	int ret = (int)vmcall(vmcallargs(vec, CLOSE, 1, c->dev));
 	if (ret < 0) {
 		error("vmcallclose");
 	}
@@ -168,7 +174,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallread");
 	uvlong vec[8];
-	uvlong ret = vmcall(vmcallargs(vec, PREAD, c->dev, PADDR(a), n, off));
+	uvlong ret = vmcall(vmcallargs(vec, PREAD, 4, c->dev, PADDR(a), n, off));
 	return (long)ret;
 }
 
@@ -177,7 +183,7 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	uvlong vec[8];
 	error("vmcallwrite");
-	uvlong ret = vmcall(vmcallargs(vec, PWRITE, c->dev, PADDR(a), n, off));
+	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(a), n, off));
 	return (long)ret;
 }
 
