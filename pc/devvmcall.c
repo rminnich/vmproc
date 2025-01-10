@@ -60,7 +60,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	Dir d;
 	int nqid, j;
 	int fullpathlen = 2;
-	uvlong vec[8];
+	static 	uvlong vec[8];
 
 	print("vmcallwalk, nname %d:", nname);
 	for (j = 0; j < nname; j++){
@@ -130,7 +130,7 @@ static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
 	char *p = "/";
-	uvlong vec[8];
+	static 	uvlong vec[8];
 	print("vmcallstat name %p\n", p);
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(dp), n));
 	print("vmcallstat %s %#llx\n", p, ret);
@@ -141,7 +141,7 @@ static Chan*
 vmcallopen(Chan *c, int omode)
 {
 	error("vmcallopen");
-	uvlong vec[8];
+	static 	uvlong vec[8];
 	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(c->path->s), omode));
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
@@ -159,7 +159,7 @@ vmcallcreate(Chan*, char*, int, ulong)
 static void
 vmcallclose(Chan *c)
 {
-	uvlong vec[8];
+	static 	uvlong vec[8];
 	print("vmcallclose\n");
 	if (! c)
 		return;
@@ -173,7 +173,7 @@ static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
 	error("vmcallread");
-	uvlong vec[8];
+	static 	uvlong vec[8];
 	uvlong ret = vmcall(vmcallargs(vec, PREAD, 4, c->dev, PADDR(a), n, off));
 	return (long)ret;
 }
@@ -181,7 +181,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
-	uvlong vec[8];
+	static 	uvlong vec[8];
 	error("vmcallwrite");
 	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(a), n, off));
 	return (long)ret;
