@@ -464,9 +464,11 @@ static uvlong sys(uvlong cmd)
 	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			return 0;
+			return (uvlong)-1;
 		case STAT:
 			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
+		case OPEN:
+			return (uvlong)open((char *)args[0], (int)args[1]);
 	}
 }
 

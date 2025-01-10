@@ -144,8 +144,12 @@ vmcallstat(Chan *c, uchar *dp, int n)
 static Chan*
 vmcallopen(Chan *c, int omode)
 {
-	error("vmcallopen");
 	static 	uvlong vec[8];
+	if (! c->path)
+		error("vmcallopen:no path");
+	if (! c->path->s)
+		error("vmcallopen:path string is nil");
+	print("Open %s\n", c->path->s);
 	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(c->path->s), omode));
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
