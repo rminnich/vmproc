@@ -87,6 +87,7 @@ vmxsetup(void)
 	rc = read(ctlfd, name, sizeof(name) - 1);
 	if(rc < 0) sysfatal("read: %r");
 	name[rc] = 0;
+	print("Device %s\n", name);
 	if(segname == nil){
 		segname = smprint("vm.%s", name);
 		segrclose = ORCLOSE;
@@ -337,7 +338,7 @@ mksegment(char *sn)
 			sysfatal("out of address space");
 		sz += r->end - r->start;
 	}
-	gmem = segattach(0, sn, nil, sz);
+	gmem = segattach(0, sn, 0x1000000, sz);
 	if(gmem == (void*)-1){
 		snprint(buf, sizeof(buf), "#g/%s", sn);
 		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
@@ -345,7 +346,7 @@ mksegment(char *sn)
 		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
 		fd = open(buf, OWRITE|OTRUNC);
 		if(fd < 0) sysfatal("open: %r");
-		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", 0x10000000ULL, (uvlong)sz);
+		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", 0x1000000ULL, (uvlong)sz);
 		if(write(fd, buf, strlen(buf)) < 0) sysfatal("write: %r");
 		close(fd);
 		gmem = segattach(0, sn, nil, sz);
@@ -659,14 +660,14 @@ threadmain(int argc, char **argv)
 	cmdlinev = argv + 1;
 	
 	if(gmemsz < 1<<20) sysfatal("640 KB of RAM is not enough for everyone");
+	/* shared space is always mapped first. */
+	mkregion(0x1000000, gmemsz, REGALLOC|REGFREE|REGRWX);
 	mkregion(0, 0xa0000, REGALLOC|REGFREE|REGRWX);
 	mkregion(0xa0000, 0xc0000, REGALLOC|REGRWX);
 	mkregion(0xc0000, 0x100000, REGALLOC|REGRES|REGRWX);
 	if(fbsz != 0 && fbaddr < gmemsz){
 		mkregion(0x100000, fbaddr, REGALLOC|REGFREE|REGRWX);
-		mkregion(fbaddr + fbsz, gmemsz, REGALLOC|REGFREE|REGRWX);
-	}else
-		mkregion(0x100000, gmemsz, REGALLOC|REGFREE|REGRWX);
+	}
 	if(fbsz != 0){
 		if(fbaddr < 1<<20) sysfatal("framebuffer must not be within first 1 MB");
 		if(fbaddr != (u32int) fbaddr || (u32int)(fbaddr+fbsz) < fbaddr) sysfatal("framebuffer must be within first 4 GB");
