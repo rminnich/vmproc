@@ -349,7 +349,7 @@ mksegment(char *sn)
 		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", 0x1000000ULL, (uvlong)sz);
 		if(write(fd, buf, strlen(buf)) < 0) sysfatal("write: %r");
 		close(fd);
-		gmem = segattach(0, sn, nil, sz);
+		gmem = segattach(0, sn, 0x1000000, sz);
 		if(gmem == (void*)-1) sysfatal("segattach: %r");
 	}else{
 		memset(gmem, 0, sz > 1<<24 ? 1<<24 : sz);
