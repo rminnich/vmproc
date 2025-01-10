@@ -22,13 +22,14 @@ static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
 {
 	va_list ap;
 	uvlong val;
-	int i = 1;
+	int i;
 
 	print("vmcallargs: start vec %p, narg %d \n", vec, narg);
 	va_start(ap, narg);
 	vec[0] = scallno;
 	print("vmcallargs: scallno %#llx\n", scallno);
 	for(i = 1; i < narg+1; i++) {
+		val = va_arg(ap, uvlong);
 		print("vmcallargs: add arg %d, val %#llx\n", i, val);
 		vec[i] = val;
 	}
@@ -131,9 +132,12 @@ vmcallstat(Chan *c, uchar *dp, int n)
 {
 	char *p = "/";
 	static 	uvlong vec[8];
+	void *v = mallocz(n, 1);
 	print("vmcallstat name %p dp %p\n", p, dp);
-	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(dp), n));
+	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
 	print("vmcallstat %s %#llx\n", p, ret);
+	memmove(dp, v, n);
+	free(v);
 	return (int)ret;
 }
 
