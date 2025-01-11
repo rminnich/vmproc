@@ -30,7 +30,7 @@ static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
 	print("vmcallargs: scallno %#llx\n", scallno);
 	for(i = 1; i < narg+1; i++) {
 		val = va_arg(ap, uvlong);
-		print("vmcallargs: add arg %d, val %#llx\n", i, val);
+		print("vmcallargs: add arg %d, val %p\n", i, val);
 		vec[i] = val;
 	}
 	va_end(ap);
@@ -79,10 +79,8 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	print("alloc %d\n", alloc);
 	wq = smalloc(sizeof(Walkqid)+nname*sizeof(Qid));
 	if(waserror()){
-		if(0)
 		if(alloc && wq->clone != nil)
 			cclose(wq->clone);
-		if(0)
 		free(wq);
 		return nil;
 	}
@@ -92,7 +90,6 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		nc->type = 0;	/* device doesn't know about this channel yet */
 	}
 	print("devcloned nname %d nc %p wq %p\n", nname, nc, wq);
-	if (nname>0) error("fuck");
 	wq->clone = nc;
 	print("before for\n");
 	for(nqid = 0; nqid < nname; nqid++) {
@@ -105,15 +102,16 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		wq->qid[nqid] = d.qid;
 	}
 	print("after for nqid %d\n", nqid);
-	if (nname > 0)
-	error("fuck");
 	int sz = 1 /* for / */ + fullpathlen + 2;
 	print("sz %d\n", sz);
 	char *nm = mallocz(sz, 1);
 	print("nm is %p\n", nm);
 	strcat(nm, "/");
-	for(j = 0; j < nname; j++)
+	for(j = 0; j < nname; j++){
 		strcat(nm, name[j]);
+		if (j < nname-1)
+			strcat(nm, "/");
+	}
 
 	print("nm %p %s\n", nm, nm);
 	poperror();
@@ -149,11 +147,13 @@ vmcallopen(Chan *c, int omode)
 		error("vmcallopen:no path");
 	if (! c->path->s)
 		error("vmcallopen:path string is nil");
-	print("Open %s\n", c->path->s);
+	print("Open '%s'\n", c->path->s);
 	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(c->path->s), omode));
+	print("ret is %lld\n", ret);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
 	}
+	print("ret is %d\n", (int)ret);
 	c->dev = ret;
 	return c;
 }
@@ -168,9 +168,7 @@ static void
 vmcallclose(Chan *c)
 {
 	static 	uvlong vec[8];
-	print("vmcallclose\n");
-	if (! c)
-		return;
+	print("vmcallclose fd %#ld\n", c->dev);
 	int ret = (int)vmcall(vmcallargs(vec, CLOSE, 1, c->dev));
 	if (ret < 0) {
 		error("vmcallclose");
@@ -180,9 +178,19 @@ vmcallclose(Chan *c)
 static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
-	error("vmcallread");
+	void *v;
 	static 	uvlong vec[8];
-	uvlong ret = vmcall(vmcallargs(vec, PREAD, 4, c->dev, PADDR(a), n, off));
+	print("vmcallread fd %ld\n", c->dev);
+	v = malloc(n);
+	if (waserror()) {
+		free(v);
+	}
+	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
+	if ((int)ret < 0)
+		error("vmcallread");
+	memmove(a, v, n);
+	poperror();
+	free(v);
 	return (long)ret;
 }
 

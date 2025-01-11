@@ -464,11 +464,16 @@ static uvlong sys(uvlong cmd)
 	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
+			print("vmcall:NO\n");
 			return (uvlong)-1;
 		case STAT:
 			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
 		case OPEN:
 			return (uvlong)open((char *)args[0], (int)args[1]);
+		case PREAD:
+			return (uvlong)pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+		case PWRITE:
+			return (uvlong)pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 	}
 }
 
@@ -486,9 +491,19 @@ static uvlong ksys(uvlong *sp)
 	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			return 0;
+			return (uvlong)-1;
 		case STAT:
+			print("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
 			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
+		case OPEN:
+			print("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
+			return (uvlong)open((char *)args[0], (int)args[1]);
+		case PREAD:
+			print("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			return (uvlong)pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+		case PWRITE:
+			print("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			return (uvlong)pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 	}
 }
 
