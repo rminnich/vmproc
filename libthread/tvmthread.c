@@ -245,6 +245,23 @@ network(void *arg)
 }
 
 void
+date(void *arg)
+{
+	USED(arg);
+ 	char buf[256];
+	int fd, amt;
+	extern uvlong vmcall(uvlong,uvlong,void *,uvlong,uvlong, uvlong);
+	vmcall((uvlong)fcall,(uvlong)print, "date! %p!\n", (uvlong)buf, 0, 0);
+	fd = vmcall((uvlong)syscall,OPEN, "/env/timezone", 0, 0, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "fd is %p\n", (uvlong)fd, 0, 0);
+	amt = vmcall((uvlong)syscall,_READ, (void *)fd, (uvlong)buf, strlen(buf),  0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %p\n", (uvlong)amt, 0, 0);
+	amt = vmcall((uvlong)syscall,_WRITE, (void *)1, (uvlong)buf, sizeof(buf)-1, 0);
+	vmcall((uvlong)fcall,(uvlong)print, "amt is %p buf is %s\n", (uvlong)amt, (uvlong)buf, 0);
+	while (1);
+}
+
+void
 message(void *arg)
 {
 	USED(arg);
@@ -332,7 +349,7 @@ threadmain(int argc, char **argv)
 	uvlong forever = 0;
 	extern void to64(void);
 
-	test = 8;
+	test = 9;
 	ARGBEGIN{
 	case 'q':
 		quiet = 1;
@@ -433,6 +450,16 @@ threadmain(int argc, char **argv)
 				exits("vmthreadcreate failed");
 			}
 			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)network), (void *)0x1000000, 1024) < 0) {
+				exits("second vmthreadcreate failed");
+			}
+			break;
+
+		case 9:
+			threadcreate(watcher, &forever, 1024);
+			if (vmthreadcreate ((void *)to64, (void *)0x1000000, 1024) < 0) {
+				exits("vmthreadcreate failed");
+			}
+			if (vmthreadcreate ((void *)((u8int*)vmbase+(uvlong)date), (void *)0x1000000, 1024) < 0) {
 				exits("second vmthreadcreate failed");
 			}
 			break;

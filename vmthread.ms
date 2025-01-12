@@ -701,6 +701,8 @@ void directcall(void *arg)
 }
 .P2
 This is not nearly as convenient as it needs to be, of course, but it does work.
+An obvious next step is to create a variant of libc, vlibc, which provides a limited
+number of system calls (rfork is a distant dream, for example) that call vmcall instead of syscall.
 .SH
 Using vmcall to implement kernel drivers in the guest
 .LP
@@ -727,29 +729,6 @@ same way host process operations are visible. This would rememedy a tricky probl
 malware hides behind a virtualization wall, using the opacity of emulated device IO to hide its network
 operations. 
 We can easily see what is going on behind the virtualization veil. 
-.SH
-Building driverless kernels
-.LP
-Going even further, we can run Plan 9 with no drivers at all.
-We can have a parameter to the kernel that indicates it is a driverless guest.
-For system calls, in the system call function, we can change just one line:
-.P1
-ret = systab[scallnr]((va_list)up->s.args);
-.P2
-to
-.P1
-+if (nativesystemcalls)
-	ret = systab[scallnr]((va_list)up->s.args);
-+else
-+	ret = vmcall(scallnr+0x2000, (va_list)up->s.args);
-.P2
-.LP
-The result is a guest kernel that needs no drivers at all.
-The guest kernel, instead of using, e.g., an emulated ethernet, graphics, or serial device, will function as a process does, calling system calls directly.
-This approach is very similar to Google's Gvisor software.
-.LP
-Note that this can support programs only, and at present, would not support kernel
-functions that use, e.g., open (exec). But it is a start.
 .SH
 Conclusions and future work
 .LP
