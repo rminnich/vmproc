@@ -62,8 +62,9 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	int nqid, j;
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
+	char *p = c->aux ? c->aux : "/";
 
-	print("vmcallwalk, nname %d:", nname);
+	print("vmcallwalk, p %s nname %d:",p, nname);
 	for (j = 0; j < nname; j++){
 		print("/%s", name[j]);
 		fullpathlen += strlen(name[j])+1;
@@ -73,8 +74,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	if(nname > 0)
 		isdir(c);
 
-	print("nc %p\n", nc);
-	if (nname>0) error("fuck");
+	print("c %p nc %p\n", c, nc);
 	alloc = (nc == nil);
 	print("alloc %d\n", alloc);
 	wq = smalloc(sizeof(Walkqid)+nname*sizeof(Qid));
@@ -102,16 +102,18 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		wq->qid[nqid] = d.qid;
 	}
 	print("after for nqid %d\n", nqid);
-	int sz = 1 /* for / */ + fullpathlen + 2;
+	int sz = strlen(p) + 1 /* for / */ + fullpathlen + 2; // for null and fudge
 	print("sz %d\n", sz);
 	char *nm = mallocz(sz, 1);
 	print("nm is %p\n", nm);
+	strcat(nm, p);
 	strcat(nm, "/");
 	for(j = 0; j < nname; j++){
 		strcat(nm, name[j]);
 		if (j < nname-1)
 			strcat(nm, "/");
 	}
+	nc->aux = nm;
 
 	print("nm %p %s\n", nm, nm);
 	poperror();
@@ -128,7 +130,9 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
-	char *p = "/";
+	char *p = c->aux;
+	if (!c->aux)
+		error("c->aux is nil");
 	static 	uvlong vec[8];
 	void *v = mallocz(n, 1);
 	print("vmcallstat name %p dp %p\n", p, dp);
@@ -142,13 +146,12 @@ vmcallstat(Chan *c, uchar *dp, int n)
 static Chan*
 vmcallopen(Chan *c, int omode)
 {
+	char *p = c->aux;
 	static 	uvlong vec[8];
-	if (! c->path)
+	if (! p)
 		error("vmcallopen:no path");
-	if (! c->path->s)
-		error("vmcallopen:path string is nil");
-	print("Open '%s'\n", c->path->s);
-	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(c->path->s), omode));
+	print("Open '%s'\n", p);
+	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(p), omode));
 	print("ret is %lld\n", ret);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");
@@ -198,8 +201,9 @@ static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	static 	uvlong vec[8];
-	error("vmcallwrite");
-	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(a), n, off));
+	void *v = malloc(n);
+	memmove(v, a, n);
+	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(v), n, off));
 	return (long)ret;
 }
 
