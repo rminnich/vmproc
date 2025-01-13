@@ -92,34 +92,34 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	print("devcloned nname %d nc %p wq %p\n", nname, nc, wq);
 	wq->clone = nc;
 	print("before for\n");
-	for(nqid = 0; nqid < nname; nqid++) {
-		print("vmstat %s\n", name[j]);
-		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(name[j]), PADDR(dp), sizeof(dp)));
-		if ((int)ret < 0)
-			break;
-		print("convM2d?\n");
-		convM2D(dp, sizeof(dp), &d, nil);
-		wq->qid[nqid] = d.qid;
-	}
-	print("after for nqid %d\n", nqid);
 	int sz = strlen(p) + 1 /* for / */ + fullpathlen + 2; // for null and fudge
 	print("sz %d\n", sz);
 	char *nm = mallocz(sz, 1);
 	print("nm is %p\n", nm);
 	strcat(nm, p);
 	strcat(nm, "/");
-	for(j = 0; j < nname; j++){
-		strcat(nm, name[j]);
-		if (j < nname-1)
-			strcat(nm, "/");
-	}
-	nc->aux = nm;
-
 	print("nm %p %s\n", nm, nm);
+	for(nqid = 0; nqid < nname; nqid++) {
+		print("vmstat %s\n", name[nqid]);
+		strcat(nm, name[nqid]);
+		if (nqid < nname-1)
+			strcat(nm, "/");
+		print("nm %p %s\n", nm, nm);
+
+		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(dp), sizeof(dp)));
+		if ((int)ret < 0)
+			break;
+		print("convM2d?\n");
+		convM2D(dp, sizeof(dp), &d, nil);
+		wq->qid[nqid] = d.qid;
+	}
+	print("after for nqid %d nnames %d\n", nqid, nname);
+	if (nc && nqid == nname)
+		nc->aux = nm;
+
 	poperror();
 	print("after poperror");
 	wq->nqid = nqid;
-	//wq->qid[0].path = (uvlong) nm;
 	if(wq->clone != nil){
 		/* attach cloned channel to same device */
 		wq->clone->type = c->type;
