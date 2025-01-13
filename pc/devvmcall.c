@@ -57,13 +57,13 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
 	int alloc;
 	Walkqid *wq;
-	uchar dp[128]; // for now.
+	uchar *dp;
 	Dir d;
 	int nqid, j;
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
 	char *p = c->aux ? c->aux : "/";
-
+	dp = malloc(128);
 	print("vmcallwalk, p %s nname %d:",p, nname);
 	for (j = 0; j < nname; j++){
 		print("/%s", name[j]);
@@ -106,7 +106,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			strcat(nm, "/");
 		print("nm %p %s\n", nm, nm);
 
-		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(dp), sizeof(dp)));
+		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), sizeof(dp)));
 		if ((int)ret < 0)
 			break;
 		print("convM2d?\n");
