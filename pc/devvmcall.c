@@ -106,16 +106,21 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			strcat(nm, "/");
 		print("nm %p %s\n", nm, nm);
 
-		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), sizeof(dp)));
+		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), 128));
 		if ((int)ret < 0)
 			break;
 		print("convM2d?\n");
-		convM2D(dp, sizeof(dp), &d, nil);
+		convM2D(dp, 128, &d, nil);
+		print("%s; qid %#llx %#llx %x\n", nm, d.qid.path, d.qid.vers, d.qid.type);
 		wq->qid[nqid] = d.qid;
 	}
 	print("after for nqid %d nnames %d\n", nqid, nname);
-	if (nc && nqid == nname)
+	if (nc && nqid == nname) {
 		nc->aux = nm;
+		nc->qid = wq->qid[nqid-1];
+	} else {
+		free(nm);
+	}
 
 	poperror();
 	print("after poperror");
