@@ -461,10 +461,10 @@ static uvlong sys(uvlong cmd)
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
+	vmdebug2("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			print("vmcall:NO\n");
+			vmdebug2("vmcall:NO\n");
 			return (uvlong)-1;
 		case STAT:
 			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
@@ -482,41 +482,41 @@ static uvlong ksys(uvlong *sp)
 {
 	uvlong cmd;
 	int ret;
-	print("ksys: sp %p\n", sp);
+	vmdebug2("ksys: sp %p\n", sp);
 	cmd = sp[0];
 	uvlong args[4];
 	args[0] = sp[1];
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
+	vmdebug2("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			print("UNSUPPORTED return -1\n");
+			vmdebug2("UNSUPPORTED return -1\n");
 			ret = -1;
 			break;
 		case STAT:
-			print("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
+			vmdebug2("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
 			ret = stat((char *)args[0], (uchar *)args[1], args[2]);
 			break;
 		case OPEN:
-			print("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
+			vmdebug2("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
 			ret = open((char *)args[0], (int)args[1]);
 			break;
 		case CLOSE:
-			print("CLOSE NOT: %d\n", (int)args[0]);
+			vmdebug2("CLOSE NOT: %d\n", (int)args[0]);
 			ret = 0 ? close((int)args[0]) : 0;
 			break;
 		case PREAD:
-			print("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			vmdebug2("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			ret = pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 		case PWRITE:
-			print("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			vmdebug2("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			ret = pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 	}
-	print("return value %d\n", ret);
+	vmdebug2("return value %d\n", ret);
 	return (uvlong)ret;
 }
 
@@ -533,7 +533,7 @@ dovmcall(ExitInfo *ei)
 	cmd = (uvlong)f;
 	// Special vmcalls that we handle right here. For now.
 	if (cmd < 128) {
-		print("%c", (char)(uvlong)f);
+		vmdebug2("%c", (char)(uvlong)f);
 		out = 1;
 		goto done;
 	}
@@ -545,7 +545,7 @@ dovmcall(ExitInfo *ei)
 		rc = pread(regsfd, buf, sizeof(buf) - 1, 0);
 		if(rc < 0) sysfatal("rcload: pread: %r");
 		buf[rc] = 0;
-		print("REGS:%s\n", buf);
+		vmdebug2("REGS:%s\n", buf);
 		out = (uvlong)rc;
 		goto done;
 	}
@@ -555,7 +555,7 @@ dovmcall(ExitInfo *ei)
 		goto done;
 	}
 	if (cmd & 0x8000000000000000) {
-		print("KSYS:");
+		vmdebug2("KSYS:");
 		out = ksys((uvlong *)(cmd&~0x8000000000000000));
 		goto done;
 	}
@@ -569,9 +569,9 @@ dovmcall(ExitInfo *ei)
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	//if (debug > 1) print("VMCALL sp %p *sp %p, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
+	//if (debug > 1) vmdebug2("VMCALL sp %p *sp %p, %p(%p, %p, %p, %p):", sp, *sp, f, args[0], args[1], args[2], args[3]);
 	out = f(args[0], args[1], args[2], args[3]);
-	//if (debug > 1) print("...%lld\n", out);
+	//if (debug > 1) vmdebug2("...%lld\n", out);
 done:
 	rset(RAX, out);
 	skipinstr(ei);
