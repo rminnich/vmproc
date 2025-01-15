@@ -481,6 +481,7 @@ static uvlong sys(uvlong cmd)
 static uvlong ksys(uvlong *sp)
 {
 	uvlong cmd;
+	int ret;
 	print("ksys: sp %p\n", sp);
 	cmd = sp[0];
 	uvlong args[4];
@@ -491,20 +492,32 @@ static uvlong ksys(uvlong *sp)
 	print("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			return (uvlong)-1;
+			print("UNSUPPORTED return -1\n");
+			ret = -1;
+			break;
 		case STAT:
 			print("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
-			return (uvlong)stat((char *)args[0], (uchar *)args[1], args[2]);
+			ret = stat((char *)args[0], (uchar *)args[1], args[2]);
+			break;
 		case OPEN:
 			print("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
-			return (uvlong)open((char *)args[0], (int)args[1]);
+			ret = open((char *)args[0], (int)args[1]);
+			break;
+		case CLOSE:
+			print("CLOSE NOT: %d\n", (int)args[0]);
+			ret = 0 ? close((int)args[0]) : 0;
+			break;
 		case PREAD:
 			print("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
-			return (uvlong)pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			ret = pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			break;
 		case PWRITE:
 			print("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
-			return (uvlong)pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			ret = pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			break;
 	}
+	print("return value %d\n", ret);
+	return (uvlong)ret;
 }
 
 static void
@@ -542,6 +555,7 @@ dovmcall(ExitInfo *ei)
 		goto done;
 	}
 	if (cmd & 0x8000000000000000) {
+		print("KSYS:");
 		out = ksys((uvlong *)(cmd&~0x8000000000000000));
 		goto done;
 	}
