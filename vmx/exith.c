@@ -504,8 +504,8 @@ static uvlong ksys(uvlong *sp)
 			ret = open((char *)args[0], (int)args[1]);
 			break;
 		case CLOSE:
-			vmdebug2("CLOSE NOT: %d\n", (int)args[0]);
-			ret = 0 ? close((int)args[0]) : 0;
+			vmdebug2("CLOSE: %d\n", (int)args[0]);
+			ret = 1 ? close((int)args[0]) : 0;
 			break;
 		case PREAD:
 			vmdebug2("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
