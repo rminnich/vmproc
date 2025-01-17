@@ -21,6 +21,23 @@ Dirtab vmcalldir[]={
 	".",	{Qdir, 0, QTDIR},	0,	DMDIR|0555,
 };
 
+// alloc and leak if it is too low.
+static void *valloc(int amt) {
+	void *v;
+	while(PADDR(v = malloc(amt)) < 0x1000000)
+		;
+	vmdebug("valloc(%d): %p\n", amt, v);
+	return v;
+}
+
+static void *vallocz(int amt, int zero) {
+	void *v;
+	while(PADDR(v = mallocz(amt, zero)) < 0x1000000)
+		;
+	vmdebug("vallocz(%d, %d): %p\n", amt, zero, v);
+	return v;
+}
+
 static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
 {
 	va_list ap;
@@ -65,7 +82,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
 	char *p = c->aux ? c->aux : "/";
-	dp = malloc(128);
+	dp = valloc(128);
 	vmdebug("vmcallwalk, p %s nname %d:",p, nname);
 	for (j = 0; j < nname; j++){
 		vmdebug("/%s", name[j]);
@@ -96,13 +113,20 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	vmdebug("before for\n");
 	int sz = strlen(p) + 1 /* for / */ + fullpathlen + 2; // for null and fudge
 	vmdebug("sz %d\n", sz);
-	char *nm = mallocz(sz, 1);
+	char *nm = vallocz(sz, 1);
+	if (nm == nil)
+		panic("nm is nil?");
+	if (p == nil)
+		panic("p is nil?");
 	vmdebug("nm is %p\n", nm);
 	strcat(nm, p);
 	strcat(nm, "/");
 	vmdebug("nm %p %s\n", nm, nm);
 	for(nqid = 0; nqid < nname; nqid++) {
 		vmdebug("vmstat %s\n", name[nqid]);
+		if (name[nqid] == nil)
+			panic("nm %s name[%d] nil", nm, nqid);
+			
 		strcat(nm, name[nqid]);
 		if (nqid < nname-1)
 			strcat(nm, "/");
@@ -144,7 +168,7 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	if (!c->aux)
 		error("c->aux is nil");
 	static 	uvlong vec[8];
-	void *v = mallocz(n, 1);
+	void *v = vallocz(n, 1);
 	vmdebug("vmcallstat name %p dp %p\n", p, dp);
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s %#llx\n", p, ret);
@@ -198,7 +222,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	void *v;
 	static 	uvlong vec[8];
 	vmdebug("vmcallread fd %ld\n", c->dev);
-	v = malloc(n);
+	v = valloc(n);
 	if (waserror()) {
 		free(v);
 	}
@@ -215,7 +239,7 @@ static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	static 	uvlong vec[8];
-	void *v = malloc(n);
+	void *v = valloc(n);
 	memmove(v, a, n);
 	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(v), n, off));
 	return (long)ret;
