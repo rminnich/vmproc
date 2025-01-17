@@ -24,7 +24,7 @@ operations in a file system.
 Guest VMs are frequently accessed over an emulated network connection, as though they
 were an entirely independent system.
 .LP
-In contrast, VMThreads allows users to run virtual machines at the granularity of a 
+In contrast, VMThreads allows users to run virtual machines of any size, even a single
 machine instruction;
 .FS
 For example, we used a single-instruction VM guest to debug our vmcall support.
@@ -38,7 +38,9 @@ Further, it is possible to implement a driver-less kernel, i.e. one which uses s
 calls, not low-level IO operations, and monitor the VMs use
 of network, disk, and other resources 
 directly, rather than trying to reconstruct its activity from its use of emulated
-devices.
+devices. We discuss the implementation of this model in #V, a device which maps 
+driver IO functions to system calls, communicated from guest to host via vmcall
+instructions. We have added this device support to the 9front vmx command.
 .LP
 While the VMs as threads model is very simple, it is as capable as more complex systems:
 we first implemented VMThreads in the Akaros research kernel, and
@@ -89,7 +91,10 @@ The API is identical to the threadcreate API from libthread.
 The rest of this paper is organized as follows: we provided an overview of virtualization; discuss
 the Akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
-and then show examples of its use.
+and show examples of its use.
+We also discuss an extension of the 9front vmx command, and a new kernel device, which 
+maps guest device operations such as walk, open, read, and write, to system calls, communicated
+to the host via the vmcall instruction. 
 .SH
 Virtualization
 .LP
@@ -654,7 +659,9 @@ opcode	arguments	function
 0-127	None	Print the argument to stdout
 0x1000	None	Print registers and the first 2MiB of page table mappings
 0x2000-0x2fff	[arg0, arg1, ...]	Call syscall number (opcode-0x2000), with the args
-2MiB and up	[arg0, arg1, ...]	Call function pointer in arg0 with the  args	
+2MiB and up	[arg0, arg1, ...]	Call function pointer in arg0 with the  args
+0x80000000 | opcode	[arg0, arg1, ...]	Call syscall number ((uint32)opcode), with the args.
+		Intended for guest kernel system calls
 .TE
 .SH
 Running code in shared memory
@@ -716,19 +723,71 @@ functions in the low memory.
 The code is readonly, so corrupting it is not an issue. The data is writable, but it is a copy -- 
 any corruption of the low data memory will result in the untimely exit of the guest.
 .LP
-One way to implement this would be to create a device, e.g. #Y, that relayed file IO from guest to host.
-So, e.g., an open of #Y/net/icmp/clone would open /net/icmp/clone on the host. 
+Using host virtual addresses from the kernel requires that the kernel be linked with vmx, which is
+inflexible.
+Instead, we created a device, #V, which maps device functions to system calls.
+In this case, all pointers must be passed as kernel physical, not kernel virtual; 
+further, data from user programs must be copied in to kernel space, to ensure it is physically contiguous
+and to avoid Time Of Check/Time Of use (TOCTOU) problems.
+We show an example of how arguments are transformed below. The function, vmcallargs, takes a pointer to a
+uvlong vector, and transforms the system call and the arguments:
+.P1
+static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
+{
+	va_list ap;
+	int i;
+
+	va_start(ap, narg);
+	vec[0] = scallno;
+	for(i = 1; i < narg+1; i++) {
+		vec[i] = va_arg(ap, uvlong);
+	}
+	va_end(ap);
+	return PADDR(vec) | 0x8000000000000000;
+}
+.P2
 .LP
-In this scenario, the guest would be much simpler. It would need no IO devices or memory-mapped devices, 
-or even its own TCP stack. Guest network IO would be completely observable, not hidden behind 
-a sequence of IOs to an emulated network device.
+The read function in the device is shown below.
+.P1
+static long
+vmcallread(Chan *c, void *a, long n, vlong off)
+{
+	void *v;
+	static 	uvlong vec[8];
+	v = malloc(n);
+	if (waserror()) {
+		free(v);
+	}
+	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, 
+		(uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
+	if ((int)ret < 0)
+		error("vmcallread");
+	memmove(a, v, n);
+	poperror();
+	free(v);
+	return (long)ret;
+}
+.P2
+.LP
+The bounce buffer adds overhead,
+but a non-bounce-buffer implementation would be far more complex, requiring breaking the
+read into groups of physically contiguous pages, with the required page table walks, locking,
+and bugs.
+For now, the performance of the bounce buffer implementation is more than adequate.
+.LP
 The result is a very different model than has been used in recent virtual machine models: the guest kernel
 is accessing system resources in the same way as any host process, via file operations; 
 its operations are visible in the 
-same way host process operations are visible. This would rememedy a tricky problem that comes with VMs: when
+same way host process operations are visible. This would rememedy a common problem that comes with VMs: when
 malware hides behind a virtualization wall, using the opacity of emulated device IO to hide its network
 operations. 
 We can easily see what is going on behind the virtualization veil. 
+.LP
+The performance of #V is very good. Using
+.P1
+time du -s
+.P2
+on different paths, it is anywhere from 2 to 10 times as fast as the virtual disk.
 .SH
 Conclusions and future work
 .LP
@@ -748,24 +807,6 @@ it will mostly be a matter of adding the vmx device IO to a Go program.
 .SH
 References
 .LP
-[Bac86] Maurice J. Bach,
-.I "The Design of the UNIX Operating System,
-Prentice-Hall,
-Englewood Cliffs,
-1986.
-.LP
-[Dij72] Edsger W. Dijkstra,
-``The Humble Programmer \- 1972 Turing Award Lecture'',
-.I "Comm. ACM,
-15(10), pp. 859-866, 
-October 1972.
-.LP
-[Hol91] Gerard J. Holzmann,
-.I "Design and Validation of Computer Protocols,
-Prentice-Hall,
-Englewood Cliffs,
-1991.
-.LP
 [Pik90]
 Rob Pike,
 Dave Presotto,
@@ -776,9 +817,3 @@ Howard Trickey,
 pp. 1-9,
 London,
 July, 1990.
-.LP
-[Sal66] Jerome H. Saltzer,
-.I "Traffic Control in a Multiplexed Computer System
-MIT,
-Cambridge, Mass.,
-1966.
