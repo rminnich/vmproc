@@ -136,6 +136,148 @@ The arguments over classifying these types of VMs may never end, but, commonly, 
 above all other kernels; and KVM,the BSD VMs, the OSX and Plan 9 VMs;  are called a Type 2, as they are contained
 in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type 2 kernels. When we use the term VM, we are 
 discussing a Type 2 VM.
+.SH
+Virtual Machine Memory addressing
+.LP
+In this section we review some basics of VM virtual address spaces.
+VMs, on x86, can run in 16-, 32-, and 64-bit modes. In 16- and 32-bit modes, virtual addressing
+is optional. In 64-bit mode, it is mandatory, as required by the architecture.
+Recall that virtual addressing is enabled by page tables, as shown below.
+.PS
+K: box "kernel"
+P: box "process" with .s at K.n+(0,.2)
+L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+M: box "memory" ht 2i with .sw at L.se + (1,0)
+arrow "virtual" from K.e to L.w
+arrow "virtual" from P.e to Q.w
+arrow "physical" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+.PE
+One might wonder: when a VM is in 16- or 32-bit mode, without virtual addressing enabled, 
+can it transparently reference physical
+memory, as host software in those modes can?
+Does the picture look like the one below?
+.PS
+K: box "kernel"
+P: box "process" with .s at K.n+(0,.2)
+L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+M: box "memory" ht 2i with .sw at L.se + (1,0)
+arrow "virtual" from K.e to L.w
+arrow "virtual" from P.e to Q.w
+arrow "physical" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+V: box "VM" with .s at P.n+(0,.2)
+
+arrow "guest" "physical" from V.e to M.w
+
+.PE
+The answer, as you might guess, is "no".
+Were VMs to work that way, there would be no security at all. 
+Instead, there is a page-table-like structure that maps guest physical addresses to host physical
+addresses. On Intel, this is called the EPT.
+.PS
+K: box "kernel"
+P: box "process" with .s at K.n+(0,.2)
+L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+M: box "memory" ht 2i with .sw at L.se + (1,0)
+arrow "virtual" from K.e to L.w
+arrow "virtual" from P.e to Q.w
+arrow "physical" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+V: box "VM" with .s at P.n+(0,.2)
+W: box "Extended" " page" "tables" with .w at V.e +(.5,0)
+arrow "guest" "physical" from V.e to W.w
+arrow "host" "physical" from W.e to M.w
+.PE
+What is shown will work for any 16- or 32-bit code that does not enable
+virtual addressing. It will not work for 64-bit mode; that requires
+virtual addressing to be enabled. Further, no 16-bit process can run with
+paging enabled. The result is that there are at least 5 possible ways to run a guest.
+.LP
+In this paper, we are only concerned with a 64-bit guest, with virtual addressing enabled.
+We show what that looks like below.
+.PS
+K: box "kernel"
+P: box "process" with .s at K.n+(0,.2)
+L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+M: box "memory" ht 2i with .sw at L.se + (1,0)
+arrow "virtual" from K.e to L.w
+arrow "virtual" from P.e to Q.w
+arrow "physical" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+V: box "VM" with .s at P.n+(-.7,.2)
+X: box "VM" "page" "tables" with .w at V.e + (.5,0)
+W: box "Extended" " page" "tables" with .w at X.e +(.5,0)
+arrow "guest" "virtual" from V.e to X.w
+arrow "guest" "physical" from X.e to W.w
+arrow "host" "physical" from W.e to M.w
+.PE
+That may look like a lot of table walking. In fact, it is worse than it appears. 
+Every guest page table walk resolves to a guest physical address.
+That guest physical address must, in turn, be translated to a host physical address. 
+The process is shown below.
+.PS
+
+F: box "guest" "PML4"
+box "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+M: box "Memory" ht 2i with .nw at last box.ne + (.2,0)
+arrow from 2nd last box.e to M.w 
+
+G:box "guest" "PML3" with .n at F.s - (0,.1)
+spline -> from M.e right .2 then down 1.8 then left 6 then up 2 then to G.w
+box "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow from last box.e to M.w 
+
+H:box "guest" "PML3" with .n at G.s - (0,.1)
+spline -> from M.e right .2 then down 1.9 then left 6 then up 1.5 then to H.w
+box "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow from last box.e to M.w 
+
+I:box "guest" "PML2" with .n at H.s - (0,.1)
+spline -> from M.e right .2 then down 2 then left 6 then up 1 then to I.w
+box "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow from last box.e to M.w 
+
+.PE
+
+.SH
+Virtual Machine managers
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
 Virtual Machine Manager (VMM).
@@ -182,7 +324,25 @@ or to Ring V, using the VM Control Structure (VMCS) context and a VMRESUME instr
 Akaros can decide, each time it resumes a process, whether to resume it in Ring 3 or Ring V. 
 Processes can flip back and forth between the two modes at will. 
 .LP
-Akaros takes the model one step further: the guest physical address space is the same as process virtual address space. 
+Akaros takes the model one step further: the guest physical address space is the same as process virtual address space, as shown below:
+.PS
+K: box "kernel"
+P: box "process" with .s at K.n+(0,.2)
+L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+M: box "memory" ht 2i with .sw at L.se + (1,0)
+arrow "virtual" from K.e to L.w
+arrow "virtual" from P.e to Q.w
+arrow "physical" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+V: box "VM" with .s at P.n+(-1.5,.2)
+X: box "VM" "page" "tables" with .w at V.e + (.5,0)
+W: box "Extended" " page" "tables" with .s at Q.n
+arrow "guest" "virtual" from V.e to X.w
+arrow "guest" "physical" from X.e to W.w
+arrow "host" "physical" from W.e to M.w
+.PE
 A VMM can start a kernel by reading the kernel file into memory and 
 starting a vmthread with the kernel entry point as the initial program counter (PC). 
 VMMs can even run user programs in Guest Ring 0, i.e. as kernels. 

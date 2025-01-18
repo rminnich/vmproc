@@ -205,6 +205,9 @@ static void
 vmcallclose(Chan *c)
 {
 	static 	uvlong vec[8];
+	// this is called right before the channel is freed.
+	// freeing aux is safe.
+	free(c->aux);
 	// never opened?
 	if (c->dev == -1)
 		return;
