@@ -208,6 +208,7 @@ vmcallclose(Chan *c)
 	// this is called right before the channel is freed.
 	// freeing aux is safe.
 	free(c->aux);
+	c->aux = nil;
 	// never opened?
 	if (c->dev == -1)
 		return;
