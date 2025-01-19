@@ -146,13 +146,13 @@ Recall that virtual addressing is enabled by page tables, as shown below.
 .PS
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
-L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.5,0)
-M: box "memory" ht 2i with .sw at L.se + (1,0)
-arrow "virtual" from K.e to L.w
-arrow "virtual" from P.e to Q.w
-arrow "physical" from L.e to M.w
-arrow "physical" from Q.e to M.w
+L: box "kernel" "page" "tables" with .w at K.e +(.6, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.6,0)
+M: box "memory" ht 1i with .sw at L.se + (1,0)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
+arrow "physical" "" from L.e to M.w
+arrow "physical" "" from Q.e to M.w
 
 .PE
 One might wonder: when a VM is in 16- or 32-bit mode, without virtual addressing enabled, 
@@ -162,17 +162,17 @@ Does the picture look like the one below?
 .PS
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
-L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.5,0)
-M: box "memory" ht 2i with .sw at L.se + (1,0)
-arrow "virtual" from K.e to L.w
-arrow "virtual" from P.e to Q.w
+L: box "kernel" "page" "tables" with .w at K.e +(.6, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.6,0)
+V: box "VM" with .s at P.n+(0,.2)
+M: box "memory" ht 1i with .nw at V.ne + (2,0)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
 arrow "physical" from L.e to M.w
 arrow "physical" from Q.e to M.w
 
-V: box "VM" with .s at P.n+(0,.2)
 
-arrow "guest" "physical" from V.e to M.w
+arrow "guest physical" "" from V.e to M.w
 
 .PE
 The answer, as you might guess, is "no".
@@ -182,16 +182,16 @@ addresses. On Intel, this is called the EPT.
 .PS
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
-L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+L: box "kernel" "page" "tables" with .w at K.e +(.6, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.6,0)
 M: box "memory" ht 2i with .sw at L.se + (1,0)
-arrow "virtual" from K.e to L.w
-arrow "virtual" from P.e to Q.w
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
 arrow "physical" from L.e to M.w
 arrow "physical" from Q.e to M.w
 
 V: box "VM" with .s at P.n+(0,.2)
-W: box "Extended" " page" "tables" with .w at V.e +(.5,0)
+W: box "Extended" " page" "tables" with .w at V.e +(.6,0)
 arrow "guest" "physical" from V.e to W.w
 arrow "host" "physical" from W.e to M.w
 .PE
@@ -206,16 +206,16 @@ We show what that looks like below.
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
 L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.5,0)
-M: box "memory" ht 2i with .sw at L.se + (1,0)
-arrow "virtual" from K.e to L.w
-arrow "virtual" from P.e to Q.w
+Q: box "process" " page" "tables" with .w at P.e +(.6,0)
+M: box "memory" ht 2i with .sw at L.se + (1.4,0)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
 arrow "physical" from L.e to M.w
 arrow "physical" from Q.e to M.w
 
 V: box "VM" with .s at P.n+(-.7,.2)
-X: box "VM" "page" "tables" with .w at V.e + (.5,0)
-W: box "Extended" " page" "tables" with .w at X.e +(.5,0)
+X: box "VM" "page" "tables" with .w at V.e + (.6,0)
+W: box "Extended" " page" "tables" with .w at X.e +(.6,0)
 arrow "guest" "virtual" from V.e to X.w
 arrow "guest" "physical" from X.e to W.w
 arrow "host" "physical" from W.e to M.w
@@ -235,11 +235,11 @@ box "EPT" "L2" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L1" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
-M: box "Memory" ht 2i with .nw at last box.ne + (.2,0)
-arrow from 2nd last box.e to M.w 
+M: box "Memory" ht 1.5i with .nw at last box.ne + (.4,0)
+arrow from 2nd last box.e to M.w +(0,.1)
 
 G:box "guest" "PML3" with .n at F.s - (0,.1)
-spline -> from M.e right .2 then down 1.8 then left 6 then up 2 then to G.w
+spline -> from M.e + (0,.1) right .4 then down 3 then left 6.4 then up 2 then to G.w
 box "EPT" "L4" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L3" with .w at last box.e + (.2,0)
@@ -251,7 +251,7 @@ arrow from 2nd last box.e to last box.w
 arrow from last box.e to M.w 
 
 H:box "guest" "PML3" with .n at G.s - (0,.1)
-spline -> from M.e right .2 then down 1.9 then left 6 then up 1.5 then to H.w
+spline -> from M.e right .3 then down 2.7 then left 6.2 then up 1.5 then to H.w
 box "EPT" "L4" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L3" with .w at last box.e + (.2,0)
@@ -260,10 +260,10 @@ box "EPT" "L2" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L1" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
-arrow from last box.e to M.w 
+arrow from last box.e to M.w +(0,-.1)
 
 I:box "guest" "PML2" with .n at H.s - (0,.1)
-spline -> from M.e right .2 then down 2 then left 6 then up 1 then to I.w
+spline -> from M.e + (0,-.1) right .2 then down 2.4 then left 6 then up 1 then to I.w
 box "EPT" "L4" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L3" with .w at last box.e + (.2,0)
@@ -272,7 +272,7 @@ box "EPT" "L2" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L1" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
-arrow from last box.e to M.w 
+arrow "physical" "" "address" from last box.e to M.s +(0,-.55) then to M.s
 
 .PE
 
@@ -328,16 +328,16 @@ Akaros takes the model one step further: the guest physical address space is the
 .PS
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
-L: box "kernel" "page" "tables" with .w at K.e +(.5, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.5,0)
+L: box "kernel" "page" "tables" with .w at K.e +(.6, 0)
+Q: box "process" " page" "tables" with .w at P.e +(.6,0)
 M: box "memory" ht 2i with .sw at L.se + (1,0)
-arrow "virtual" from K.e to L.w
-arrow "virtual" from P.e to Q.w
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" ""  from P.e to Q.w
 arrow "physical" from L.e to M.w
 arrow "physical" from Q.e to M.w
 
 V: box "VM" with .s at P.n+(-1.5,.2)
-X: box "VM" "page" "tables" with .w at V.e + (.5,0)
+X: box "VM" "page" "tables" with .w at V.e + (.6,0)
 W: box "Extended" " page" "tables" with .s at Q.n
 arrow "guest" "virtual" from V.e to X.w
 arrow "guest" "physical" from X.e to W.w
@@ -379,53 +379,8 @@ There are two standard vmcalls used in this example:
 VTH_VMCALL_PRINTC and VTH_VMCALL_EXIT; VTH_VMCALL_TEST1 is a custom 
 vmcall implemented in this same program.
 .LP
-Below we show show the custom vmcall handler code.
-.P1
-enum {
-	MY_VMCALL_TEST1 = VTH_VMCALL_NEXT,
-	MY_VMCALL_TEST2,
-};
-
-/* Here's how you can make your own vmcalls and still 
- * use the standard vthread vmcalls for
- * standard operations. You also have the option
- * to replace or extend the standard operations. */
-static bool extended_handle_vmcall(struct guest_thread *gth,
-                                   struct vm_trapframe *vm_tf)
-{
-	switch (vm_tf->tf_rax) {
-	case MY_VMCALL_TEST1:
-		goto out_ok;
-	}
-	// call this for standard vmcalls.
-	return vth_handle_vmcall(gth, vm_tf);
-out_ok:
-	vm_tf->tf_rip += 3;
-	return TRUE;
-};
-
-/* Structure to define a virtual machine.
- * In this example, we tell Akaros that we have
- * a custom vmcall handler, and initialize the
- * mutex (.mtx) structure member.
- */
-static struct virtual_machine 
-vm = {.vmcall = extended_handle_vmcall,
-      .mtx = UTH_MUTEX_INIT};
-.P2
-There is an enum, which defines several test vmcalls; and a function, 
-extended_handle_vmcall, which implements the vmcall itself. 
-If the vmcall is not handled by this function, as determined by the
-switch, then the standard vth_handle_vmcall function is used.
-If the .vmcall structure member in the virtual_machine struct is left
-unset, then the Akaros libraries provide a default handler.
-.FS
-I no longer remember why we coded it this way, instead of using 
-a default in the switch. It may be because of the needed manipulation
-of the return address (tf_rip).
-.FE
-.LP
-Finally, we can show the VMM itself. This examples runs 5 VMs simultaneously, i.e. on 5 cores.
+Below we show an VMM that runs this function. 
+This examples runs 5 VMs simultaneously, i.e. on 5 cores.
 This is a multi-threaded program running several VMs on several cores at once. 
 It is the
 technique we use to start an SMP kernel such as Linux: each Linux core (VM guest) is a thread in the host.
@@ -443,14 +398,6 @@ int main(int argc, char **argv)
 		vthread_join(vths[i], &retvals[i]);
 		assert(retvals[i] == (void*)i);
 	}
-
-	/* Tests reuse / GPC leakage */
-	for (long i = 0; i < NR_VTHS * 2; i++) {
-		vths[0] = vthread_create(&vm, thread_entry, (void*)i);
-		vthread_join(vths[0], &retvals[0]);
-		assert(retvals[0] == (void*)i);
-	}
-	assert(vm.nr_gpcs == NR_VTHS);
 
 	return 0;
 }

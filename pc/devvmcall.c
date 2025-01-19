@@ -11,7 +11,7 @@ uvlong vmcall(uvlong, ...);
 
 static int debug = 0;
 #define vmdebug if(!debug) {} else print
-
+#define vmallocdebug print
 enum
 {
 	Qdir=		0x8000,
@@ -26,7 +26,7 @@ static void *valloc(int amt) {
 	void *v;
 	while(PADDR(v = malloc(amt)) < 0x1000000)
 		;
-	vmdebug("valloc(%d): %p\n", amt, v);
+	vmallocdebug("valloc(%d): %p\n", amt, v);
 	return v;
 }
 
@@ -34,8 +34,14 @@ static void *vallocz(int amt, int zero) {
 	void *v;
 	while(PADDR(v = mallocz(amt, zero)) < 0x1000000)
 		;
-	vmdebug("vallocz(%d, %d): %p\n", amt, zero, v);
+	vmallocdebug("vallocz(%d, %d): %p\n", amt, zero, v);
 	return v;
+}
+
+static void vfree(void *p)
+{
+	free(p);
+	vmallocdebug("free %p\n", p);
 }
 
 static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
@@ -148,7 +154,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			nc->qid = wq->qid[nqid-1];
 		nc->dev = -1;
 	} else {
-		free(nm);
+		vfree(nm);
 	}
 
 	poperror();
@@ -173,7 +179,7 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s %#llx\n", p, ret);
 	memmove(dp, v, n);
-	free(v);
+	vfree(v);
 	return (int)ret;
 }
 
@@ -207,7 +213,7 @@ vmcallclose(Chan *c)
 	static 	uvlong vec[8];
 	// this is called right before the channel is freed.
 	// freeing aux is safe.
-	free(c->aux);
+	vfree(c->aux);
 	c->aux = nil;
 	// never opened?
 	if (c->dev == -1)
@@ -228,14 +234,14 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	vmdebug("vmcallread fd %ld\n", c->dev);
 	v = valloc(n);
 	if (waserror()) {
-		free(v);
+		vfree(v);
 	}
 	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
 	if ((int)ret < 0)
 		error("vmcallread");
 	memmove(a, v, n);
 	poperror();
-	free(v);
+	vfree(v);
 	return (long)ret;
 }
 
