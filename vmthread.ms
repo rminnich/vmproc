@@ -28,7 +28,8 @@ In contrast, VMThreads allows users to run virtual machines of any size, even a 
 machine instruction;
 .FS
 For example, we used a single-instruction VM guest to debug our vmcall support.
-.FE a function; a set of functions comprising a driver; or a kernel.
+.FE 
+a function; a set of functions comprising a driver; or a kernel.
 Because the guest VM is created as a thread, it is easy to share data structures with it.
 Threads outside the VM thread can examine and control the guest behavior, allowing
 a level of debugging that might otherwise require hardware support.
@@ -54,7 +55,7 @@ it requires no kernel changes.
 Introduction
 .LP
 Virtualization is a hardware capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
-VMs do not stand alone; they require a virtual machine manager, or VMM, to start them, 
+VMs do not stand alone; they require a Virtual Machine Manager, or VMM, to start them, 
 provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
 is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
@@ -116,7 +117,7 @@ Xen was an early open source virtualization system for commodity x86 systems,
 and was widely deployed on Amazon Web Services. 
 .LP
 Xen is a kernel which runs other kernels as a VM guest, i.e. "Domains", with one kernel ("Domain 0")
-being given special priveleges to perform IO, since Xen has no drivers
+being given special privileges to perform IO, since Xen has no drivers
 of its own. 
 Xen is always the host, and kernels are always the guest. In Xen, every kernel runs
 at a lower privilege level than the Xen kernel. 
@@ -126,7 +127,7 @@ Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtua
 There are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
 .FE
 Unlike Xen, 
-KVM  VMs runs as a driver in Linux.
+KVM  VMs run as a driver in Linux.
 In this model, a single general purpose host kernel is more 
 privileged than the virtual machine software, which in turn is more privileged than any VM guest. 
 The driver manages architectural features that enable and control virtualization. 
@@ -168,7 +169,7 @@ V: box "VM" with .s at P.n+(0,.2)
 M: box "memory" ht 1i with .nw at V.ne + (2,0)
 arrow "virtual" "" from K.e to L.w
 arrow "virtual" "" from P.e to Q.w
-arrow "physical" from L.e to M.w
+arrow "physical" "" from L.e to M.w
 arrow "physical" from Q.e to M.w
 
 
@@ -263,7 +264,7 @@ arrow from 2nd last box.e to last box.w
 arrow from last box.e to M.w +(0,-.1)
 
 I:box "guest" "PML2" with .n at H.s - (0,.1)
-spline -> from M.e + (0,-.1) right .2 then down 2.4 then left 6 then up 1 then to I.w
+spline  -> from M.e + (0,-.1) right .2 then down 2.4 then left 6 then up 1 then to I.w
 box "EPT" "L4" with .w at last box.e + (.2,0)
 arrow from 2nd last box.e to last box.w 
 box "EPT" "L3" with .w at last box.e + (.2,0)
@@ -298,7 +299,7 @@ at the same time, a basic Linux VMM, written in C, can be as small as a megabyte
 Typically, smaller 
 VMMs can not handle widely varying demands of guests; the larger VMMs have support for more complicated operations, e.g., 
 BIOS interrupts needed for DOS.
-A common open source VMM is qemu, but there are many others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
+A common open source VMM is qemu, but there are a few others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
 .LP
 With few exeptions, the VM API is built around a device model, frequently
 requiring special privilege to access. 
@@ -329,7 +330,7 @@ Akaros takes the model one step further: the guest physical address space is the
 K: box "kernel"
 P: box "process" with .s at K.n+(0,.2)
 L: box "kernel" "page" "tables" with .w at K.e +(.6, 0)
-Q: box "process" " page" "tables" with .w at P.e +(.6,0)
+Q: box "process" " page" "tables" ht .6i with .sw at P.se +(.6,0)
 M: box "memory" ht 2i with .sw at L.se + (1,0)
 arrow "virtual" "" from K.e to L.w
 arrow "virtual" ""  from P.e to Q.w
@@ -338,7 +339,7 @@ arrow "physical" from Q.e to M.w
 
 V: box "VM" with .s at P.n+(-1.5,.2)
 X: box "VM" "page" "tables" with .w at V.e + (.6,0)
-W: box "Extended" " page" "tables" with .s at Q.n
+W: box "Extended" " page" "tables" ht .6i with .s at Q.n
 arrow "guest" "virtual" from V.e to X.w
 arrow "guest" "physical" from X.e to W.w
 arrow "host" "physical" from W.e to M.w
@@ -895,6 +896,18 @@ The performance of #V is very good. Using
 time du -s
 .P2
 on different paths, it is anywhere from 2 to 10 times as fast as the virtual disk.
+.SH
+An example offloading of kernel components to the host
+.LP
+All Plan 9 network access is effected by file I/O. By convention, the files are located
+in /net or /net.alt.
+One could build a kernel with no IP stack, and no network drivers, and provide network access
+as follows:
+.P1
+bind '#V'/net /net
+.P2
+At that point, all programs which use the network will transparently use the network
+of the VMM. The kernel running in the guest can hence be very small.
 .SH
 Conclusions and future work
 .LP
