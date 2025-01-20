@@ -22,26 +22,26 @@ Dirtab vmcalldir[]={
 };
 
 // alloc and leak if it is too low.
-static void *valloc(int amt) {
+static void *valloc(char *who, int amt) {
 	void *v;
 	while(PADDR(v = malloc(amt)) < 0x1000000)
 		;
-	vmallocdebug("valloc(%d): %p\n", amt, v);
+	vmallocdebug("%s:valloc(%d): %p\n", who, amt, v);
 	return v;
 }
 
-static void *vallocz(int amt, int zero) {
+static void *vallocz(char *who,int amt, int zero) {
 	void *v;
 	while(PADDR(v = mallocz(amt, zero)) < 0x1000000)
 		;
-	vmallocdebug("vallocz(%d, %d): %p\n", amt, zero, v);
+	vmallocdebug("%s:vallocz(%d, %d): %p\n", who,amt, zero, v);
 	return v;
 }
 
-static void vfree(void *p)
+static void vfree(char *who, void *p)
 {
 	free(p);
-	vmallocdebug("free %p\n", p);
+	vmallocdebug("%s:free %p\n", who, p);
 }
 
 static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
@@ -88,7 +88,10 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
 	char *p = c->aux ? c->aux : "/";
-	dp = valloc(128);
+	dp = valloc("walk dp", 128);
+	if (waserror()) {
+		free(dp);
+	}
 	vmdebug("vmcallwalk, p %s nname %d:",p, nname);
 	for (j = 0; j < nname; j++){
 		vmdebug("/%s", name[j]);
@@ -119,7 +122,10 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	vmdebug("before for\n");
 	int sz = strlen(p) + 1 /* for / */ + fullpathlen + 2; // for null and fudge
 	vmdebug("sz %d\n", sz);
-	char *nm = vallocz(sz, 1);
+	char *nm = vallocz("walk name", sz, 1);
+	if (waserror()) {
+		free(nm);
+	}
 	if (nm == nil)
 		panic("nm is nil?");
 	if (p == nil)
@@ -146,6 +152,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		vmdebug("%s; qid %#llx %#lx %#x\n", nm, d.qid.path, d.qid.vers, d.qid.type);
 		wq->qid[nqid] = d.qid;
 	}
+	vfree("walk dp", dp);
 	vmdebug("after for nqid %d nnames %d\n", nqid, nname);
 
 	if (nc && nqid == nname) {
@@ -154,9 +161,10 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			nc->qid = wq->qid[nqid-1];
 		nc->dev = -1;
 	} else {
-		vfree(nm);
+		vfree("walk name", nm);
 	}
-
+	poperror();
+	poperror();
 	poperror();
 	vmdebug("after poperror");
 	wq->nqid = nqid;
@@ -174,12 +182,12 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	if (!c->aux)
 		error("c->aux is nil");
 	static 	uvlong vec[8];
-	void *v = vallocz(n, 1);
+	void *v = vallocz("vmcallstat", n, 1);
 	vmdebug("vmcallstat name %p dp %p\n", p, dp);
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s %#llx\n", p, ret);
 	memmove(dp, v, n);
-	vfree(v);
+	vfree("vmcallstat", v);
 	return (int)ret;
 }
 
@@ -213,7 +221,7 @@ vmcallclose(Chan *c)
 	static 	uvlong vec[8];
 	// this is called right before the channel is freed.
 	// freeing aux is safe.
-	vfree(c->aux);
+	vfree("vmcallclose", c->aux);
 	c->aux = nil;
 	// never opened?
 	if (c->dev == -1)
@@ -232,16 +240,16 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	void *v;
 	static 	uvlong vec[8];
 	vmdebug("vmcallread fd %ld\n", c->dev);
-	v = valloc(n);
+	v = valloc("vmcallread", n);
 	if (waserror()) {
-		vfree(v);
+		vfree("vmcallread", v);
 	}
 	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
 	if ((int)ret < 0)
 		error("vmcallread");
 	memmove(a, v, n);
 	poperror();
-	vfree(v);
+	vfree("vmcallread", v);
 	return (long)ret;
 }
 
@@ -249,9 +257,13 @@ static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
 	static 	uvlong vec[8];
-	void *v = valloc(n);
+	void *v = valloc("vmcallwrite", n);
+	if (waserror()) {
+		vfree("vmcallread", v);
+	}
 	memmove(v, a, n);
 	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(v), n, off));
+	vfree("vmcallwrite", v);
 	return (long)ret;
 }
 
