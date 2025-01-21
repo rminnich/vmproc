@@ -9,10 +9,10 @@
 
 uvlong vmcall(uvlong, ...);
 
-static int vvdebug = 1;
+static int vvdebug = 0;
 #define vmdebug if(!vvdebug) {} else print
 
-static int vdebug = 1;
+static int vdebug = 0;
 
 enum
 {
@@ -99,6 +99,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	dp = valloc("walk dp", 128);
 	if (waserror()) {
 		free(dp);
+		vmdebug("Walk returns nil after errors\n");
 		return nil;
 	}
 	if(nname > 0)
@@ -150,8 +151,8 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 
 		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), 128));
 		if ((int)ret < 0) {
-			vmdebug("%s: not found\n");
-			break;
+			vmdebug("%s: not found\n", nm);
+			error(Enonexist);
 		}
 		vmdebug("convM2d?\n");
 		convM2D(dp, 128, &d, nil);
@@ -167,9 +168,6 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		if (nname > 0)
 			nc->qid = wq->qid[nqid-1];
 		nc->dev = -1;
-	} else {
-		error(Enonexist);
-		//vfree("walk name", nm);
 	}
 	poperror();
 	poperror();
@@ -189,11 +187,11 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	char *p = c->aux;
 	if (!c->aux)
 		error("c->aux is nil");
-	static 	uvlong vec[8];
+	uvlong vec[8];
 	void *v = vallocz("vmcallstat", n, 1);
-	vmdebug("vmcallstat name %p dp %p\n", p, dp);
+	vmdebug("vmcallstat name %s addr %p dp %p\n", p, p, dp);
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
-	vmdebug("vmcallstat %s %#llx\n", p, ret);
+	vmdebug("vmcallstat %s returns %#llx, want %d\n", p, ret, n);
 	memmove(dp, v, n);
 	vfree("vmcallstat", v);
 	return (int)ret;
