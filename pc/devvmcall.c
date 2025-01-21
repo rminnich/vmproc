@@ -9,9 +9,11 @@
 
 uvlong vmcall(uvlong, ...);
 
-static int debug = 0;
-#define vmdebug if(!debug) {} else print
-#define vmallocdebug print
+static int vvdebug = 1;
+#define vmdebug if(!vvdebug) {} else print
+
+static int vdebug = 1;
+
 enum
 {
 	Qdir=		0x8000,
@@ -26,7 +28,7 @@ static void *valloc(char *who, int amt) {
 	void *v;
 	while(PADDR(v = malloc(amt)) < 0x1000000)
 		;
-	vmallocdebug("%s:valloc(%d): %p\n", who, amt, v);
+	if (vdebug) print("%s:valloc(%d): %p\n", who, amt, v);
 	return v;
 }
 
@@ -34,14 +36,14 @@ static void *vallocz(char *who,int amt, int zero) {
 	void *v;
 	while(PADDR(v = mallocz(amt, zero)) < 0x1000000)
 		;
-	vmallocdebug("%s:vallocz(%d, %d): %p\n", who,amt, zero, v);
+	if (vdebug) print("%s:vallocz(%d, %d): %p\n", who,amt, zero, v);
 	return v;
 }
 
 static void vfree(char *who, void *p)
 {
 	free(p);
-	vmallocdebug("%s:free %p\n", who, p);
+	if (vdebug) print("%s:free %p\n", who, p);
 }
 
 static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
@@ -88,17 +90,17 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
 	char *p = c->aux ? c->aux : "/";
-	dp = valloc("walk dp", 128);
-	if (waserror()) {
-		free(dp);
-	}
-	vmdebug("vmcallwalk, p %s nname %d:",p, nname);
+	vmdebug("vmcallwalk, c %p, c->aux %p, p %s nname %d:, name'", c, c->aux, p, nname);
 	for (j = 0; j < nname; j++){
 		vmdebug("/%s", name[j]);
 		fullpathlen += strlen(name[j])+1;
 	}
-	vmdebug("\n");
-	vmdebug("again, nname %d\n", nname);
+	vmdebug("'\n");
+	dp = valloc("walk dp", 128);
+	if (waserror()) {
+		free(dp);
+		return nil;
+	}
 	if(nname > 0)
 		isdir(c);
 
@@ -110,11 +112,12 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		if(alloc && wq->clone != nil)
 			cclose(wq->clone);
 		free(wq);
-		return nil;
+		nexterror();
 	}
 	vmdebug("wq %p\n", wq);
 	if(alloc){
 		nc = devclone(c);
+		nc->aux = nil; // we do not clone the name.
 		nc->type = 0;	/* device doesn't know about this channel yet */
 	}
 	vmdebug("devcloned nname %d nc %p wq %p\n", nname, nc, wq);
@@ -125,6 +128,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	char *nm = vallocz("walk name", sz, 1);
 	if (waserror()) {
 		free(nm);
+		nexterror();
 	}
 	if (nm == nil)
 		panic("nm is nil?");
@@ -133,7 +137,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	vmdebug("nm is %p\n", nm);
 	strcat(nm, p);
 	strcat(nm, "/");
-	vmdebug("nm %p %s\n", nm, nm);
+	vmdebug("before for nm %p %s\n", nm, nm);
 	for(nqid = 0; nqid < nname; nqid++) {
 		vmdebug("vmstat %s\n", name[nqid]);
 		if (name[nqid] == nil)
@@ -145,14 +149,17 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		vmdebug("nm %p %s\n", nm, nm);
 
 		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), 128));
-		if ((int)ret < 0)
+		if ((int)ret < 0) {
+			vmdebug("%s: not found\n");
 			break;
+		}
 		vmdebug("convM2d?\n");
 		convM2D(dp, 128, &d, nil);
 		vmdebug("%s; qid %#llx %#lx %#x\n", nm, d.qid.path, d.qid.vers, d.qid.type);
 		wq->qid[nqid] = d.qid;
 	}
 	vfree("walk dp", dp);
+	dp = nil;
 	vmdebug("after for nqid %d nnames %d\n", nqid, nname);
 
 	if (nc && nqid == nname) {
@@ -161,7 +168,8 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			nc->qid = wq->qid[nqid-1];
 		nc->dev = -1;
 	} else {
-		vfree("walk name", nm);
+		error(Enonexist);
+		//vfree("walk name", nm);
 	}
 	poperror();
 	poperror();
@@ -221,6 +229,7 @@ vmcallclose(Chan *c)
 	static 	uvlong vec[8];
 	// this is called right before the channel is freed.
 	// freeing aux is safe.
+	vmdebug("vmcallclose c %p c->aux %p\n", c, c->aux);
 	vfree("vmcallclose", c->aux);
 	c->aux = nil;
 	// never opened?
@@ -243,6 +252,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	v = valloc("vmcallread", n);
 	if (waserror()) {
 		vfree("vmcallread", v);
+		return -1;
 	}
 	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
 	if ((int)ret < 0)
@@ -260,6 +270,7 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 	void *v = valloc("vmcallwrite", n);
 	if (waserror()) {
 		vfree("vmcallread", v);
+		return -1;
 	}
 	memmove(v, a, n);
 	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(v), n, off));
