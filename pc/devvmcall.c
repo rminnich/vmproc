@@ -187,13 +187,14 @@ vmcallstat(Chan *c, uchar *dp, int n)
 	char *p = c->aux;
 	if (!c->aux)
 		error("c->aux is nil");
-	uvlong vec[8];
+	uvlong *vec = vallocz("vmcallstat vec", 8*sizeof(uvlong), 1);
 	void *v = vallocz("vmcallstat", n, 1);
 	vmdebug("vmcallstat name %s addr %p dp %p\n", p, p, dp);
 	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s returns %#llx, want %d\n", p, ret, n);
 	memmove(dp, v, n);
 	vfree("vmcallstat", v);
+	vfree("vmcallstat vec", vec);
 	return (int)ret;
 }
 
@@ -205,7 +206,7 @@ vmcallopen(Chan *c, int omode)
 	if (! p)
 		error("vmcallopen:no path");
 	vmdebug("Open '%s'\n", p);
-	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(p), omode));
+	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(p), (uvlong)omode));
 	vmdebug("ret is %lld\n", ret);
 	if ((int)ret < 0) {
 		error("vmcallopen failed");

@@ -477,46 +477,47 @@ static uvlong sys(uvlong cmd)
 	}
 }
 
+#define debugsyscall print
 // Vec MUST be 8 entries
 static uvlong ksys(uvlong *sp)
 {
 	uvlong cmd;
 	int ret;
-	vmdebug2("ksys: sp %p\n", sp);
+	debugsyscall("ksys: sp %p\n", sp);
 	cmd = sp[0];
 	uvlong args[4];
 	args[0] = sp[1];
 	args[1] = sp[2];
 	args[2] = sp[3];
 	args[3] = sp[4];
-	vmdebug2("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
+	debugsyscall("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
-			vmdebug2("UNSUPPORTED return -1\n");
+			debugsyscall("UNSUPPORTED return -1\n");
 			ret = -1;
 			break;
 		case STAT:
-			vmdebug2("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
+			debugsyscall("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
 			ret = stat((char *)args[0], (uchar *)args[1], args[2]);
 			break;
 		case OPEN:
-			vmdebug2("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
+			debugsyscall("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
 			ret = open((char *)args[0], (int)args[1]);
 			break;
 		case CLOSE:
-			vmdebug2("CLOSE: %d\n", (int)args[0]);
+			debugsyscall("CLOSE: %d\n", (int)args[0]);
 			ret = close((int)args[0]);
 			break;
 		case PREAD:
-			vmdebug2("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			debugsyscall("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			ret = pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 		case PWRITE:
-			vmdebug2("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			debugsyscall("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			ret = pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 	}
-	vmdebug2("return value %d\n", ret);
+	debugsyscall("return value %d:%r\n", ret);
 	return (uvlong)ret;
 }
 
