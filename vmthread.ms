@@ -641,14 +641,14 @@ G:box "guest physical" wid 1.2i with .w at S.e + (1,0)
 box "0-2MiB" ht .2i wid 1.2i with .s at P.n + (0,.2i)
 box "2MiB-16MiB" ht .6i wid 1.2i with .s at last box.n
 
-Q: box "16MiB-80MiB" ht 1.2i wid 1.2i with .s at last box.n
-R:box "80MiB-96MiB" ht .8i wid 1.2i with .s at last box.n
+Q: box "16MiB-80MiB" ht .4i wid 1.2i with .s at last box.n
+R:box "80MiB-96MiB" ht .4i wid 1.2i with .s at last box.n
 
-T: box "0-64MiB" ht 1.2i wid 1.2i with .s at S.n + (0,1i)
-U: box "64MiB-80MiB" ht .8i wid 1.2i with .s at last box.n
+T: box "0-64MiB" ht .4i wid 1.2i with .s at S.n + (0,1i)
+U: box "64MiB-80MiB" ht .4i wid 1.2i with .s at last box.n
 
 H: box "0-16MiB" ht .8i wid 1.2i with .s at G.n + (0,.2i)
-I: box "16MiB-80MiB" ht 1.2i wid 1.2i with .s at last box.n
+I: box "16MiB-80MiB" ht .4i wid 1.2i with .s at last box.n
 
 line from Q.ne to I.nw
 line from Q.se to I.sw
@@ -909,6 +909,36 @@ bind '#V'/net /net
 At that point, all programs which use the network will transparently use the network
 of the VMM. The kernel running in the guest can hence be very small.
 .SH
+Debugging guest kernel allocation with host kernel acid
+.LP
+Going beyond using external name spaces for kernel use, we can even externalize
+core kernel functions to the vmm.
+Consider the kernel allocator.
+It is compatible with the libc calling conventions.
+We could establish a memory pool in the shared area, and then outsource memory
+allocation to the VMM:
+.P1
+void *kernelmalloc(int sz) {
+	return vmcall(malloc, sz);
+}
+
+void free(void *f) {
+	vmcall(f);
+}
+.P2
+Once the guest kernel is using the host (VMM) allocator, we can, 
+further, use the acid storage leak detector to look for kernel misbehavior.
+The VMM could also look for memory corruption in the arena and notify
+the user whe it occurs.
+This could be a useful technique for debugging very difficult memory corruption.
+.LP
+When starting a VM becomes equivalent to starting a thread, many possibilities
+present themselves. 
+The community has gotten into something of a herd mentality, where starting
+a VM is a Big Deal, and naturally requires large, complex libraries and system management.
+We argue the exact opposite: starting a VM should be no harder than
+starting a thread.
+.SH
 Conclusions and future work
 .LP
 We have described vmthreads, an extension to the 9front libthread, which allows guest virtual machines to run 
@@ -924,16 +954,4 @@ with system calls should allow higher perfomance.
 Finally, since the Go threading model derives directly from Plan 9, we can create a
 vmthreads package for Go. So much of the Plan 9 model already exists in the Go runtime,
 it will mostly be a matter of adding the vmx device IO to a Go program.
-.SH
-References
-.LP
-[Pik90]
-Rob Pike,
-Dave Presotto,
-Ken Thompson,
-Howard Trickey,
-``Plan 9 from Bell Labs'',
-.I "Proceedings of the Summer 1990 UKUUG Conference,
-pp. 1-9,
-London,
-July, 1990.
+
