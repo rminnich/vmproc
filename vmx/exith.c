@@ -483,13 +483,18 @@ static uvlong ksys(uvlong *sp)
 {
 	uvlong cmd;
 	int ret;
+	char *err;
+	uvlong nerr;
+	int arg = 0;
 	debugsyscall("ksys: sp %p\n", sp);
-	cmd = sp[0];
+	cmd = sp[arg++];
+	err = (char *)sp[arg++];
+	nerr = sp[arg++];
 	uvlong args[4];
-	args[0] = sp[1];
-	args[1] = sp[2];
-	args[2] = sp[3];
-	args[3] = sp[4];
+	args[0] = sp[arg++];
+	args[1] = sp[arg++];
+	args[2] = sp[arg++];
+	args[3] = sp[arg];
 	debugsyscall("vmcall:%p %p %p %p %p\n", sp, args[0], args[1], args[2], args[3]);
 	switch (cmd & 0xff) {
 		default:
@@ -497,12 +502,13 @@ static uvlong ksys(uvlong *sp)
 			ret = -1;
 			break;
 		case STAT:
-			debugsyscall("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], args[2]);
+			debugsyscall("STAT: %s %p %d\n", (char *)args[0], (uchar *)args[1], (int)args[2]);
 			ret = stat((char *)args[0], (uchar *)args[1], args[2]);
 			break;
 		case OPEN:
 			debugsyscall("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
 			ret = open((char *)args[0], (int)args[1]);
+			debugsyscall("OPEN: %d\n", ret);
 			break;
 		case CLOSE:
 			debugsyscall("CLOSE: %d\n", (int)args[0]);
@@ -517,7 +523,12 @@ static uvlong ksys(uvlong *sp)
 			ret = pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 	}
-	debugsyscall("return value %d:%r\n", ret);
+	if (ret < 0) {
+		errstr(err, nerr);
+		debugsyscall("error return value %d:%r\n", ret);
+	} else {
+		debugsyscall("return value %d\n", ret);
+	}
 	return (uvlong)ret;
 }
 

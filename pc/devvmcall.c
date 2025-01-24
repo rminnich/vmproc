@@ -46,7 +46,7 @@ static void vfree(char *who, void *p)
 	if (vdebug) print("%s:free %p\n", who, p);
 }
 
-static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
+static uvlong vmcallargs(uvlong *vec, uvlong scallno, char *err, int nerr, int narg, ...)
 {
 	va_list ap;
 	uvlong val;
@@ -55,11 +55,13 @@ static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
 	vmdebug("vmcallargs: start vec %p, narg %d \n", vec, narg);
 	va_start(ap, narg);
 	vec[0] = scallno;
+	vec[1] = PADDR(err);
+	vec[2] = (uvlong)nerr;
 	vmdebug("vmcallargs: scallno %#llx\n", scallno);
-	for(i = 1; i < narg+1; i++) {
+	for(i = 0; i < narg; i++) {
 		val = va_arg(ap, uvlong);
 		vmdebug("vmcallargs: add arg %d, val %p\n", i, val);
-		vec[i] = val;
+		vec[i+3] = val;
 	}
 	va_end(ap);
 	vmdebug("vmcallargs: return %p\n", PADDR(vec) | 0x8000000000000000);
@@ -89,6 +91,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	int nqid, j;
 	int fullpathlen = 2;
 	static 	uvlong vec[8];
+	char err[ERRMAX];
 	char *p = c->aux ? c->aux : "/";
 	vmdebug("vmcallwalk, c %p, c->aux %p, p %s nname %d:, name'", c, c->aux, p, nname);
 	for (j = 0; j < nname; j++){
@@ -100,6 +103,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	if (waserror()) {
 		free(dp);
 		vmdebug("Walk returns nil after errors\n");
+		kstrcpy(up->errstr, err, ERRMAX);
 		return nil;
 	}
 	if(nname > 0)
@@ -149,10 +153,10 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			strcat(nm, "/");
 		vmdebug("nm %p %s\n", nm, nm);
 
-		uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(nm), PADDR(dp), 128));
+		uvlong ret = vmcall(vmcallargs(vec, STAT, err, sizeof(err), 3, PADDR(nm), PADDR(dp), 128));
 		if ((int)ret < 0) {
 			vmdebug("%s: not found\n", nm);
-			error(Enonexist);
+			error(err);
 		}
 		vmdebug("convM2d?\n");
 		convM2D(dp, 128, &d, nil);
@@ -160,7 +164,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		wq->qid[nqid] = d.qid;
 	}
 	vfree("walk dp", dp);
-	dp = nil;
+	dp = nil; // Used if there is ever another call to error. 
 	vmdebug("after for nqid %d nnames %d\n", nqid, nname);
 
 	if (nc && nqid == nname) {
@@ -184,35 +188,43 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
+	char err[ERRMAX];
 	char *p = c->aux;
 	if (!c->aux)
 		error("c->aux is nil");
 	uvlong *vec = vallocz("vmcallstat vec", 8*sizeof(uvlong), 1);
 	void *v = vallocz("vmcallstat", n, 1);
 	vmdebug("vmcallstat name %s addr %p dp %p\n", p, p, dp);
-	uvlong ret = vmcall(vmcallargs(vec, STAT, 3, PADDR(p), PADDR(v), n));
+	uvlong ret = vmcall(vmcallargs(vec, STAT, err, sizeof(err), 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s returns %#llx, want %d\n", p, ret, n);
 	memmove(dp, v, n);
 	vfree("vmcallstat", v);
 	vfree("vmcallstat vec", vec);
+	if ((int)ret < 0)
+		kstrcpy(up->errstr, err, ERRMAX);
 	return (int)ret;
 }
 
 static Chan*
 vmcallopen(Chan *c, int omode)
 {
+	char err[ERRMAX];
 	char *p = c->aux;
 	static 	uvlong vec[8];
 	if (! p)
 		error("vmcallopen:no path");
 	vmdebug("Open '%s'\n", p);
-	uvlong ret = vmcall(vmcallargs(vec, OPEN, 2, PADDR(p), (uvlong)omode));
+	uvlong ret = vmcall(vmcallargs(vec, OPEN, err, sizeof(err), 2, PADDR(p), (uvlong)omode));
 	vmdebug("ret is %lld\n", ret);
 	if ((int)ret < 0) {
-		error("vmcallopen failed");
+		kstrcpy(up->errstr, err, ERRMAX);
 	}
 	vmdebug("ret is %d\n", (int)ret);
 	c->dev = ret;
+	c->mode = openmode(omode);
+	c->flag |= COPEN;
+	c->offset = 0;
+	vmdebug("open: set c %p c->dev %d c->mode %d\n", c, c->dev, c->mode);
 	return c;
 }
 
@@ -225,6 +237,7 @@ vmcallcreate(Chan*, char*, int, ulong)
 static void
 vmcallclose(Chan *c)
 {
+	char err[ERRMAX];
 	static 	uvlong vec[8];
 	// this is called right before the channel is freed.
 	// freeing aux is safe.
@@ -236,26 +249,28 @@ vmcallclose(Chan *c)
 		return;
 
 	vmdebug("vmcallclose fd %#ld name %s\n", c->dev, c->aux);
-	int ret = (int)vmcall(vmcallargs(vec, CLOSE, 1, c->dev));
+	int ret = (int)vmcall(vmcallargs(vec, CLOSE, err, sizeof(err), 1, c->dev));
 	if (ret < 0) {
-		error("vmcallclose");
+		kstrcpy(up->errstr, err, ERRMAX);
 	}
 }
 
 static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
+	char err[ERRMAX];
 	void *v;
 	static 	uvlong vec[8];
 	vmdebug("vmcallread fd %ld\n", c->dev);
 	v = valloc("vmcallread", n);
 	if (waserror()) {
 		vfree("vmcallread", v);
+		kstrcpy(up->errstr, err, ERRMAX);
 		return -1;
 	}
-	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
-	if ((int)ret < 0)
-		error("vmcallread");
+	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, sizeof(err), (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
+	if (ret < 0)
+		error(err);
 	memmove(a, v, n);
 	poperror();
 	vfree("vmcallread", v);
@@ -265,14 +280,20 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
+	char err[ERRMAX];
 	static 	uvlong vec[8];
 	void *v = valloc("vmcallwrite", n);
+	vmdebug("write: c %p c->dev %lud\n", c, c->dev);
 	if (waserror()) {
 		vfree("vmcallread", v);
+		kstrcpy(up->errstr, err, ERRMAX);
 		return -1;
 	}
 	memmove(v, a, n);
-	uvlong ret = vmcall(vmcallargs(vec, PWRITE, 4, c->dev, PADDR(v), n, off));
+	int ret = (int)vmcall(vmcallargs(vec, PWRITE, err, sizeof(err), 4, c->dev, PADDR(v), n, off));
+	if (ret < 0)
+		error(err);
+	poperror();
 	vfree("vmcallwrite", v);
 	return (long)ret;
 }
