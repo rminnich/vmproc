@@ -171,6 +171,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 		nc->aux = nm;
 		if (nname > 0)
 			nc->qid = wq->qid[nqid-1];
+		nc->path = newpath(name[nname-1]);
 		nc->dev = -1;
 	}
 	poperror();
