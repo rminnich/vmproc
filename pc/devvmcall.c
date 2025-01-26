@@ -283,8 +283,22 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 		return -1;
 	}
 	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, sizeof(err), (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
-	if (ret < 0)
-		error(err);
+	vmdebug("ret is %lld\n", ret);
+	if ((int)ret == -1) {
+		kstrcpy(up->errstr, err, ERRMAX);
+		return -1; // or should we error (up->errstr)? 
+	}
+	vmdebug("Spin on vec[0] %#llx\n", vec[0]);
+	while(!(vec[0] & (1ull << 62)))
+		sched();
+	vmdebug(" done Spin on vec[0] %#llx\n", vec[0]);
+
+	if ((vlong)vec[0] == -1) {
+		kstrcpy(up->errstr, err, ERRMAX);
+		return -1;
+	}
+	ret = (u32int) vec[0];
+	vmdebug("ret is %d\n", (int)ret);
 	memmove(a, v, n);
 	poperror();
 	vfree("vmcallread", v);

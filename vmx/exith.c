@@ -486,7 +486,7 @@ static void runopen(void *v)
 	char *err = (char *)sp[arg++];
 	int nerr = (int)sp[arg++];
 	char *name = (char *)sp[arg++];
-	int omode = (int)sp[arg++];
+	int omode = (int)sp[arg];
 	Ioproc *io = ioproc();
 	print("runopen, ioproc %p\n", io);
 	int fd = ioopen(io, name, omode);
@@ -503,6 +503,47 @@ static void runopen(void *v)
 	sp[0] = (1ull<<62)|fd;
 	print("let's exit\n");
 	threadexits("Open OK");
+}
+
+static long
+_ioread(va_list *arg)
+{
+	int fd;
+	void *a;
+	long n;
+	vlong off;
+	
+	fd = va_arg(*arg, int);
+	a = va_arg(*arg, void*);
+	n = va_arg(*arg, long);
+	off = va_arg(*arg, vlong);
+	return pread(fd, a, n, off);
+}
+
+static void runread(void *v)
+{
+	uvlong *sp = v;
+	int arg = 1;
+	char *err = (char *)sp[arg++];
+	int nerr = (int)sp[arg++];
+	int fd = (int)sp[arg++];
+	void *data = (void *)sp[arg++];
+	long amt = (long)sp[arg++];
+	vlong off = (vlong)sp[arg];
+	Ioproc *io = iops[fd];
+	print("runread, ioproc %p\n", io);
+	// ffs there's no readp
+	long ret = iocall(io, _ioread, fd, data, amt, off);
+	print("runread, read %d, ret %ld\n", fd, ret);
+	
+	if (ret < 0) {
+		errstr(err, nerr);
+		sp[0] = ret;
+		threadexits("nfg");
+	}
+	sp[0] = (1ull<<62)|ret;
+	print("let's exit\n");
+	threadexits("Read OK");
 }
 
 #define debugsyscall print
@@ -544,8 +585,7 @@ static uvlong ksys(uvlong *sp)
 			break;
 		case PREAD:
 			debugsyscall("PREAD: %d ", (int)args[0]);
-			ret = pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
-			debugsyscall("%p \"%s\" %#lx %#lx\n", (void *)args[1], (void *)args[1], (long)args[2], (long)args[3]);
+			ret = threadcreate(runread, sp, 2048);
 			break;
 		case PWRITE:
 			debugsyscall("PWRITE: %d %p \"%s\" %#lx %#lx\n", (int)args[0], (void *)args[1], (void *)args[1], (long)args[2], (long)args[3]);
