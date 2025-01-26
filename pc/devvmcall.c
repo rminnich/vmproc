@@ -9,7 +9,7 @@
 
 uvlong vmcall(uvlong, ...);
 
-static int vvdebug = 0;
+static int vvdebug = 1;
 #define vmdebug if(!vvdebug) {} else print
 
 static int vdebug = 0;
@@ -169,9 +169,12 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 
 	if (nc && nqid == nname) {
 		nc->aux = nm;
-		if (nname > 0)
+		if (nname > 0){
 			nc->qid = wq->qid[nqid-1];
-		nc->path = newpath(name[nname-1]);
+			nc->path = newpath(name[nname-1]);
+		} else {
+			nc->path = newpath(c->path->s);
+		}
 		nc->dev = -1;
 	}
 	poperror();
@@ -217,9 +220,18 @@ vmcallopen(Chan *c, int omode)
 	vmdebug("Open '%s'\n", p);
 	uvlong ret = vmcall(vmcallargs(vec, OPEN, err, sizeof(err), 2, PADDR(p), (uvlong)omode));
 	vmdebug("ret is %lld\n", ret);
-	if ((int)ret < 0) {
+	if ((int)ret == -1) {
 		kstrcpy(up->errstr, err, ERRMAX);
+		error(up->errstr);
 	}
+	while(!(vec[0] & (1ull << 62)))
+		sched();
+
+	if ((vlong)vec[0] == -1) {
+		kstrcpy(up->errstr, err, ERRMAX);
+		error(up->errstr);
+	}
+	ret = (u32int) vec[0];
 	vmdebug("ret is %d\n", (int)ret);
 	c->dev = ret;
 	c->mode = openmode(omode);
@@ -262,7 +274,8 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	char err[ERRMAX];
 	void *v;
 	static 	uvlong vec[8];
-	vmdebug("vmcallread fd %ld\n", c->dev);
+	vmdebug("vmcallread c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
+	print("cast vlong %lld to uvlong %lud\n", off, (uvlong)off);
 	v = valloc("vmcallread", n);
 	if (waserror()) {
 		vfree("vmcallread", v);
@@ -284,7 +297,7 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 	char err[ERRMAX];
 	static 	uvlong vec[8];
 	void *v = valloc("vmcallwrite", n);
-	vmdebug("write: c %p c->dev %lud\n", c, c->dev);
+	vmdebug("vmcallwrite: c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
 	if (waserror()) {
 		vfree("vmcallread", v);
 		kstrcpy(up->errstr, err, ERRMAX);

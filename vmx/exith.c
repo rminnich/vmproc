@@ -1,11 +1,13 @@
 #include <u.h>
 #include <libc.h>
+#include <thread.h>
 #include "dat.h"
 #include "fns.h"
 #include "x86.h"
 #include "/sys/src/libc/9syscall/sys.h"
 
 int persist = 1;
+static Ioproc *iops[65536];
 
 typedef struct ExitInfo ExitInfo;
 struct ExitInfo {
@@ -477,6 +479,32 @@ static uvlong sys(uvlong cmd)
 	}
 }
 
+static void runopen(void *v)
+{
+	uvlong *sp = v;
+	int arg = 1;
+	char *err = (char *)sp[arg++];
+	int nerr = (int)sp[arg++];
+	char *name = (char *)sp[arg++];
+	int omode = (int)sp[arg++];
+	Ioproc *io = ioproc();
+	print("runopen, ioproc %p\n", io);
+	int fd = ioopen(io, name, omode);
+	print("runopen, opened %s, fd %d\n", name, fd);
+	
+	if (fd < 0) {
+		sp[0] = fd;
+		threadexits("nfg");
+	}
+	if (fd > nelem(iops)){
+		snprint(err ,nerr, "fd %d is out of range: only %d allowed", fd, nelem(iops));
+	}
+	iops[fd] = io;
+	sp[0] = (1ull<<62)|fd;
+	print("let's exit\n");
+	threadexits("Open OK");
+}
+
 #define debugsyscall print
 // Vec MUST be 8 entries
 static uvlong ksys(uvlong *sp)
@@ -507,7 +535,7 @@ static uvlong ksys(uvlong *sp)
 			break;
 		case OPEN:
 			debugsyscall("OPEN: %s %d\n", (char *)args[0], (int)args[1]);
-			ret = open((char *)args[0], (int)args[1]);
+			ret = threadcreate(runopen, sp, 2048);
 			debugsyscall("OPEN: %d\n", ret);
 			break;
 		case CLOSE:
@@ -515,11 +543,12 @@ static uvlong ksys(uvlong *sp)
 			ret = close((int)args[0]);
 			break;
 		case PREAD:
-			debugsyscall("PREAD: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			debugsyscall("PREAD: %d ", (int)args[0]);
 			ret = pread((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			debugsyscall("%p \"%s\" %#lx %#lx\n", (void *)args[1], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 		case PWRITE:
-			debugsyscall("PWRITE: %d %p %#lx %#lx\n", (int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
+			debugsyscall("PWRITE: %d %p \"%s\" %#lx %#lx\n", (int)args[0], (void *)args[1], (void *)args[1], (long)args[2], (long)args[3]);
 			ret = pwrite((int)args[0], (void *)args[1], (long)args[2], (long)args[3]);
 			break;
 	}
