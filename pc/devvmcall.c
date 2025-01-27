@@ -294,8 +294,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	vmdebug(" done Spin on vec[0] %#llx\n", vec[0]);
 
 	if ((vlong)vec[0] == -1) {
-		kstrcpy(up->errstr, err, ERRMAX);
-		return -1;
+		error("read");
 	}
 	ret = (u32int) vec[0];
 	vmdebug("ret is %d\n", (int)ret);
