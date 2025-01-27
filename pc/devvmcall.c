@@ -192,20 +192,29 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
-	char err[ERRMAX];
+	char *err;
 	char *p = c->aux;
 	if (!c->aux)
 		error("c->aux is nil");
 	uvlong *vec = vallocz("vmcallstat vec", 8*sizeof(uvlong), 1);
-	void *v = vallocz("vmcallstat", n, 1);
+	void *v = vallocz("vmcallstat err", n, 1);
 	vmdebug("vmcallstat name %s addr %p dp %p\n", p, p, dp);
-	uvlong ret = vmcall(vmcallargs(vec, STAT, err, sizeof(err), 3, PADDR(p), PADDR(v), n));
+	err = valloc("vmcallread error", ERRMAX);
+	if (waserror()) {
+		kstrcpy(up->errstr, err, ERRMAX);
+		vfree("vmcallstat", v);
+		vfree("vmcallstat vec", vec);
+		vfree("vmcallstat err", err);
+	}
+	uvlong ret = vmcall(vmcallargs(vec, STAT, err, ERRMAX, 3, PADDR(p), PADDR(v), n));
 	vmdebug("vmcallstat %s returns %#llx, want %d\n", p, ret, n);
+	if ((int)ret < 0)
+		error("vmcallstat");
+	poperror();
 	memmove(dp, v, n);
 	vfree("vmcallstat", v);
 	vfree("vmcallstat vec", vec);
-	if ((int)ret < 0)
-		kstrcpy(up->errstr, err, ERRMAX);
+	vfree("vmcallstat err", err);
 	return (int)ret;
 }
 
