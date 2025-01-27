@@ -271,22 +271,23 @@ vmcallclose(Chan *c)
 static long
 vmcallread(Chan *c, void *a, long n, vlong off)
 {
-	char err[ERRMAX];
+	char *err;
 	void *v;
 	static 	uvlong vec[8];
 	vmdebug("vmcallread c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
 	print("cast vlong %lld to uvlong %lud\n", off, (uvlong)off);
 	v = valloc("vmcallread", n);
+	err = valloc("vmcallread error", ERRMAX);
 	if (waserror()) {
 		vfree("vmcallread", v);
 		kstrcpy(up->errstr, err, ERRMAX);
+		vfree("vmcallread error", err);
 		return -1;
 	}
-	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, sizeof(err), (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
+	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, ERRMAX, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
 	vmdebug("ret is %lld\n", ret);
 	if ((int)ret == -1) {
-		kstrcpy(up->errstr, err, ERRMAX);
-		return -1; // or should we error (up->errstr)? 
+		error("read"); 
 	}
 	vmdebug("Spin on vec[0] %#llx\n", vec[0]);
 	while(!(vec[0] & (1ull << 62)))
@@ -301,27 +302,31 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	memmove(a, v, n);
 	poperror();
 	vfree("vmcallread", v);
+	vfree("vmcallread error", err);
 	return (long)ret;
 }
 
 static long
 vmcallwrite(Chan *c, void *a, long n, vlong off)
 {
-	char err[ERRMAX];
+	char *err;
 	static 	uvlong vec[8];
 	void *v = valloc("vmcallwrite", n);
+	err = valloc("vmcallwrite error", ERRMAX);
 	vmdebug("vmcallwrite: c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
 	if (waserror()) {
 		vfree("vmcallread", v);
 		kstrcpy(up->errstr, err, ERRMAX);
+		vfree("vmcallwrite error", err);
 		return -1;
 	}
 	memmove(v, a, n);
-	int ret = (int)vmcall(vmcallargs(vec, PWRITE, err, sizeof(err), 4, c->dev, PADDR(v), n, off));
+	int ret = (int)vmcall(vmcallargs(vec, PWRITE, err, ERRMAX, 4, c->dev, PADDR(v), n, off));
 	if (ret < 0)
 		error(err);
 	poperror();
 	vfree("vmcallwrite", v);
+	vfree("vmcallwrite error", err);
 	return (long)ret;
 }
 
