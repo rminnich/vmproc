@@ -9,7 +9,7 @@
 
 uvlong vmcall(uvlong, ...);
 
-static int vvdebug = 1;
+static int vvdebug = 0;
 #define vmdebug if(!vvdebug) {} else print
 
 static int vdebug = 0;
