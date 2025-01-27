@@ -837,45 +837,6 @@ Instead, we created a device, #V, which maps device functions to system calls.
 In this case, all pointers must be passed as kernel physical, not kernel virtual; 
 further, data from user programs must be copied in to kernel space, to ensure it is physically contiguous
 and to avoid Time Of Check/Time Of use (TOCTOU) problems.
-We show an example of how arguments are transformed below. The function, vmcallargs, takes a pointer to a
-uvlong vector, and transforms the system call and the arguments:
-.P1
-static uvlong vmcallargs(uvlong *vec, uvlong scallno, int narg, ...)
-{
-	va_list ap;
-	int i;
-
-	va_start(ap, narg);
-	vec[0] = scallno;
-	for(i = 1; i < narg+1; i++) {
-		vec[i] = va_arg(ap, uvlong);
-	}
-	va_end(ap);
-	return PADDR(vec) | 0x8000000000000000;
-}
-.P2
-.LP
-The read function in the device is shown below.
-.P1
-static long
-vmcallread(Chan *c, void *a, long n, vlong off)
-{
-	void *v;
-	static 	uvlong vec[8];
-	v = malloc(n);
-	if (waserror()) {
-		free(v);
-	}
-	uvlong ret = vmcall(vmcallargs(vec, PREAD, (uvlong)4, 
-		(uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
-	if ((int)ret < 0)
-		error("vmcallread");
-	memmove(a, v, n);
-	poperror();
-	free(v);
-	return (long)ret;
-}
-.P2
 .LP
 The bounce buffer adds overhead,
 but a non-bounce-buffer implementation would be far more complex, requiring breaking the
@@ -891,11 +852,34 @@ malware hides behind a virtualization wall, using the opacity of emulated device
 operations. 
 We can easily see what is going on behind the virtualization veil. 
 .LP
-The performance of #V is very good. Using
+The performance of #V was always far superior 
+in the earliest version. Using
 .P1
 time du -s
 .P2
-on different paths, it is anywhere from 2 to 10 times as fast as the virtual disk.
+on different paths, it was anywhere from 2 to 10 times as fast as the virtual disk.
+However, there was a problem: the IO was blocking, and programs (e.g. telnet) that forked and had several FDs active would fail, because
+the entire VM was blocked on one read; the other read never had a chance
+to run.
+We moved to using ioprocs for IO, and that caused a dramatic
+drop in performance for disk walking: that same du is ten times slower.
+Ioprocs have never been a great performance win; we may bring 
+virtio support over from Harvey-OS and try that.
+.SH
+Comparative IO performance
+.LP
+IO to /dev/console can be much faster, as the IO is direct, rather
+than by device emulation. In this example, 4 MiB of console IO
+is 700 times faster.
+.P1
+term% time dd -if /dev/zero -of /dev/cons -bs 4096 -count 1024
+...
+0.00u 0.02s 315.89r 	 dd -if /dev/zero -of '#Z'/dev/cons ...
+term% time dd -if /dev/zero -of '#Z'/dev/cons -bs 4096 -count 1024
+...
+0.00u 0.53s 0.53r 	 dd -if /dev/zero -of #Z/dev/cons ...
+term% 
+.P2
 .SH
 An example offloading of kernel components to the host
 .LP
