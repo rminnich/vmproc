@@ -72,7 +72,7 @@ static Chan*
 vmcallattach(char *spec)
 {
 	Chan *c;
-	c = devattach('V', spec);
+	c = devattach('Z', spec);
 	c->qid.path = Qdir;
 	c->dev = -1;
 	return c;
@@ -328,7 +328,7 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 
 
 Dev vmcalldevtab = {
-	'V',
+	'Z',
 	"vmcall",
 
 	devreset,
