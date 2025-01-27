@@ -6,6 +6,8 @@
 #include "x86.h"
 #include "/sys/src/libc/9syscall/sys.h"
 
+extern int vmcalldebug;
+
 int persist = 1;
 static Ioproc *iops[65536];
 
@@ -479,6 +481,43 @@ static uvlong sys(uvlong cmd)
 	}
 }
 
+static void ioprunopen(void *v)
+{
+	uvlong *sp = v;
+	int arg = 1;
+	char *err = (char *)sp[arg++];
+	int nerr = (int)sp[arg++];
+	char *name = (char *)sp[arg++];
+	int omode = (int)sp[arg];
+	// toodo: keep an ioproc around for bootstrapping.
+	// or make a chan of them ...
+	Ioproc *io = ioproc(); // bootstrap ioproc
+	debugsyscall("runopen, ioproc %p\n", io);
+	int fd = ioopen(io, name, omode);
+	debugsyscall("runopen, opened %s, fd %d\n", name, fd);
+	
+	if (fd < 0) {
+		closeioproc(io);
+		sp[0] = fd;
+		threadexits("nfg");
+	}
+	if (fd > nelem(iops)){
+		snprint(err ,nerr, "fd %d is out of range: only %d allowed", fd, nelem(iops));
+		close(fd);
+		closeioproc(io);
+		sp[0] = -1;
+		threadexits("2many fds");
+	}
+	if (iops[fd] == nil)
+		iops[fd] = io;
+	else
+		closeioproc(io);
+
+	sp[0] = (1ull<<62)|fd;
+	debugsyscall("let's exit\n");
+	threadexits("Open OK");
+}
+
 static void runopen(void *v)
 {
 	uvlong *sp = v;
@@ -487,10 +526,9 @@ static void runopen(void *v)
 	int nerr = (int)sp[arg++];
 	char *name = (char *)sp[arg++];
 	int omode = (int)sp[arg];
-	Ioproc *io = ioproc();
-	print("runopen, ioproc %p\n", io);
-	int fd = ioopen(io, name, omode);
-	print("runopen, opened %s, fd %d\n", name, fd);
+	debugsyscall("runopen\n");
+	int fd = open(name, omode);
+	debugsyscall("runopen, opened %s, fd %d\n", name, fd);
 	
 	if (fd < 0) {
 		sp[0] = fd;
@@ -498,10 +536,15 @@ static void runopen(void *v)
 	}
 	if (fd > nelem(iops)){
 		snprint(err ,nerr, "fd %d is out of range: only %d allowed", fd, nelem(iops));
+		close(fd);
+		sp[0] = -1;
+		threadexits("2many fds");
 	}
-	iops[fd] = io;
+	if (iops[fd] == nil)
+		iops[fd] = ioproc();
+
 	sp[0] = (1ull<<62)|fd;
-	print("let's exit\n");
+	debugsyscall("let's exit\n");
 	threadexits("Open OK");
 }
 
@@ -531,10 +574,10 @@ static void runread(void *v)
 	long amt = (long)sp[arg++];
 	vlong off = (vlong)sp[arg];
 	Ioproc *io = iops[fd];
-	print("runread, ioproc %p\n", io);
+	debugsyscall("runread, ioproc %p\n", io);
 	// ffs there's no readp
 	long ret = iocall(io, _ioread, fd, data, amt, off);
-	print("runread, read %d, ret %ld\n", fd, ret);
+	debugsyscall("runread, read %d, ret %ld\n", fd, ret);
 	
 	if (ret < 0) {
 		errstr(err, nerr);
@@ -542,11 +585,10 @@ static void runread(void *v)
 		threadexits("nfg");
 	}
 	sp[0] = (1ull<<62)|ret;
-	print("let's exit\n");
+	debugsyscall("let's exit\n");
 	threadexits("Read OK");
 }
 
-#define debugsyscall print
 // Vec MUST be 8 entries
 static uvlong ksys(uvlong *sp)
 {

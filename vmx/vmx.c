@@ -11,7 +11,7 @@ Region *mmap;
 int ctlfd, regsfd, mapfd, waitfd;
 Channel *waitch, *sleepch, *notifch;
 enum { MSEC = 1000*1000, MinSleep = MSEC, SleeperPoll = 2000*MSEC } ;
-int getexit, state, debug;
+int getexit, state, debug, vmcalldebug;
 typedef struct VmxNotif VmxNotif;
 struct VmxNotif {
 	void (*f)(void *);
@@ -665,6 +665,9 @@ threadmain(int argc, char **argv)
 		break;
 	case L'ι':
 		setiodebug(EARGF(usage()));
+		break;
+	case 'V':
+		vmcalldebug++;
 		break;
 	default:
 		usage();
