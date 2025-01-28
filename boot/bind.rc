@@ -11,6 +11,7 @@ fn connectbind{
 	}
 	if not {
 		bind $1 /
+		/$cputype/bin/bind /$cputype/bin /bin
 	}
 }
 

@@ -70,6 +70,7 @@ mt=()
 
 fn main{
 	mp=()
+	mn=""
 	while(~ $#mp 0){
 		if(! ~ $#bootloop 0){
 			nobootprompt=$bootloop
@@ -92,7 +93,7 @@ fn main{
 			mp=$$mp
 		}
 	}
-
+	echo "MN IS $mn"
 	# authentication agent
 	if(! test -f /srv/factotum){
 		# we remount ip inteface after hostowner is set
@@ -127,6 +128,9 @@ fn main{
 	# connect method
 	$mp(2) $ma
 
+	if (~ $mn bind) echo BINDING
+	if not {
+	echo NOT BINDING
 	# insert cfs in the pipeline
 	if(test -x /bin/cfs){
 		if(~ $#bootdisk 1 && ~ $#cfs 0)
@@ -137,6 +141,7 @@ fn main{
 			mv /srv/cfs /srv/boot
 		}
 	}
+	
 
 	# mount and change root in new enviroment and namespace
 	rfork ne
@@ -145,6 +150,7 @@ fn main{
 	if(~ $#rootdir 0)
 		rootdir=/root
 	must mount /srv/boot /root $rootspec
+	}
 
 	# compile init command
 	if(~ $#init 0){
@@ -155,6 +161,16 @@ fn main{
 			init=($init -t)
 	}
 
+	if (~ $mn bind) {
+		echo BINDING just run an rc
+		echo ns
+		/$cputype/bin/ns
+		echo what
+		/$cputype/bin/ls -l /$cputype/bin
+		/$cputype/bin/rc
+	}
+	if not {
+	echo NOT BINDING
 	# remove enviroment variables
 	rm -f /env/^$mt /env/? /env/?? '/env/fn#'* 
 
@@ -168,6 +184,7 @@ fn main{
 
 	# remove the remaining temporary root
 	/mnt/broot/$cputype/bin/unmount /mnt/broot
+	}
 
 	exec $init
 }
