@@ -1,0 +1,18 @@
+#!/bin/rc
+
+flag x +
+
+fn configbind{
+}
+
+fn connectbind{
+	if(~ $#* 0){
+		echo bind method needs an argument
+	}
+	if not {
+		bind $1 /
+	}
+}
+
+mbind=(configbind connectbind)
+mt=(mbind $mt)
