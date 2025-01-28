@@ -851,6 +851,8 @@ same way host process operations are visible. This would rememedy a common probl
 malware hides behind a virtualization wall, using the opacity of emulated device IO to hide its network
 operations. 
 We can easily see what is going on behind the virtualization veil. 
+.SH
+Comparative directory performance with du
 .LP
 The performance of #V was always far superior 
 in the earliest version. Using
@@ -865,6 +867,7 @@ We moved to using ioprocs for IO, and that caused a dramatic
 drop in performance for disk walking: that same du is ten times slower.
 Ioprocs have never been a great performance win; we may bring 
 virtio support over from Harvey-OS and try that.
+Another option is to use blocking reads for directories.
 .SH
 Comparative IO performance
 .LP
