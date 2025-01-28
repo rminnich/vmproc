@@ -163,10 +163,10 @@ fn main{
 
 	if (~ $mn bind) {
 		echo BINDING just run an rc
-		echo ns
-		/$cputype/bin/ns
-		echo what
-		/$cputype/bin/ls -l /$cputype/bin
+		#echo ns
+		#/$cputype/bin/ns
+		#echo what
+		#/$cputype/bin/ls -l /$cputype/bin
 		/$cputype/bin/rc
 	}
 	if not {

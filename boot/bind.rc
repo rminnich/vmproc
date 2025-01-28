@@ -10,8 +10,13 @@ fn connectbind{
 		echo bind method needs an argument
 	}
 	if not {
-		bind $1 /
+		echo $1
+		echo $cputype
+		bind $1/$cputype /$cputype
 		/$cputype/bin/bind /$cputype/bin /bin
+		for(i in acme adm dist lib net rc sys usr)
+			bind $1/$i /$i
+		bind -a /rc/bin /bin
 	}
 }
 

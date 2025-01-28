@@ -173,7 +173,8 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 			nc->qid = wq->qid[nqid-1];
 			nc->path = newpath(name[nname-1]);
 		} else {
-			nc->path = newpath(c->path->s);
+			incref(c->path);
+			nc->path = c->path;
 		}
 		nc->dev = -1;
 	}
