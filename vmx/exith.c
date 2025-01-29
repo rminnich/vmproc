@@ -627,7 +627,7 @@ static uvlong ksys(uvlong *sp)
 			break;
 		case PREAD:
 			debugsyscall("PREAD: %d ", (int)args[0]);
-			ret = runread(sp);
+			ret = threadcreate(runread, sp, 2048);
 			break;
 		case PWRITE:
 			debugsyscall("PWRITE: %d %p \"%s\" %#lx %#lx\n", (int)args[0], (void *)args[1], (void *)args[1], (long)args[2], (long)args[3]);
