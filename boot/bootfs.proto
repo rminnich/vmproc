@@ -1,0 +1,55 @@
+$objtype
+	bin
+		awk
+		auth
+			secstore
+		aux
+			kbdfs
+			wpa
+		bind
+		cat
+		cfs
+		chmod
+		dd
+		echo
+		grep
+		ip
+			ipconfig
+		ls
+		mkdir
+		mntgen
+		mount
+		mv
+		ndb
+			dnsgetip
+		rc
+		rm
+		sed
+		sleep
+		srv
+		test
+		tlsclient
+		unmount
+		xd
+rc
+	lib
+		rcmain
+		reboot.rc 555 sys sys ../boot/reboot.rc
+		net.rc 555 sys sys ../boot/net.rc
+	bin
+		ethermultilink
+		srvtls
+		bootrc 555 sys sys ../boot/bootrc
+tmp
+sys
+	lib
+		kbmap
+			+
+lib
+	firmware
+
+acme
+adm
+dist
+net
+usr

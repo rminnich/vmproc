@@ -3,7 +3,7 @@
 flag x +
 
 fn configbind{
-	echo /mnt/vmproc
+	bootargs=bind!/mnt/vmproc
 }
 
 fn connectbind{
