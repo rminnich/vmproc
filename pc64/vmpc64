@@ -36,8 +36,8 @@ misc
 	archmp		mp apic squidboy
 	mtrr
 
-	uarti8250
 #	uartvm
+	uarti8250
 
 #	vgasoft		=cur swcursor
 #	vgaigfx		+cur

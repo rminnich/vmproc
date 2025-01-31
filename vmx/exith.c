@@ -654,9 +654,10 @@ dovmcall(ExitInfo *ei)
 	uvlong cmd;
 	f = (void *)rget(RBP);
 	cmd = (uvlong)f;
+	//print("%#x\n", cmd);
 	// Special vmcalls that we handle right here. For now.
 	if (cmd < 128) {
-		vmdebug2("%c", (char)(uvlong)f);
+		print("V%cV", (char)(uvlong)f);
 		out = 1;
 		goto done;
 	}

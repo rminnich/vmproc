@@ -31,6 +31,7 @@ dprint(char *fmt, ...)
 	va_list arg;
 	char buf[PRINTSIZE];
 
+	vmcall('V');
 	va_start(arg, fmt);
 	n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
 	va_end(arg);
@@ -49,6 +50,7 @@ static void kick(Uart*);
 static void
 vmuartputs(char *s, int n)
 {
+	vmcall('V');
 
 	ilock(&vmcons.txlock);
 	while (n-- > 0)
@@ -146,6 +148,7 @@ parity(Uart *uart, int n)
 void
 vmputc(Uart*, int c)
 {
+	vmcall('V');
 	vmcall(c&0x7f);
 }
 
@@ -185,16 +188,16 @@ vmconsinit(void)
 }
 
 void
-i8250console(void)
+uartvmconsole(void)
 {
 	Uart *uart;
 
+	while(1)
+	vmcall('T');
 	vmuartputs("VM\n", 3);
 	uartputs("PUTIT\n", 7);
 	// always enable.
 	uart = &vmuart;
-
-	(*uart->phys->enable)(uart, 0);
 
 	consuart = uart;
 	uart->console = 1;
