@@ -1,0 +1,191 @@
+CONF=pc
+CONFLIST=pc pcf pccpuf
+EXTRACOPIES=
+#EXTRACOPIES=lookout boundary	# copy to these servers on install
+
+objtype=386
+</$objtype/mkfile
+p=9
+
+# must match mem.h
+KTZERO=0xF0100020
+APBOOTSTRAP=0xF0007000
+REBOOTADDR=0x11000
+
+DEVS=`{rc ../port/mkdevlist $CONF}
+
+PORT=\
+	alarm.$O\
+	alloc.$O\
+	allocb.$O\
+	auth.$O\
+	cache.$O\
+	chan.$O\
+	dev.$O\
+	edf.$O\
+	fault.$O\
+	iomap.$O\
+	memmap.$O\
+	page.$O\
+	parse.$O\
+	pgrp.$O\
+	portclock.$O\
+	print.$O\
+	proc.$O\
+	qio.$O\
+	qlock.$O\
+	random.$O\
+	rdb.$O\
+	rebootcmd.$O\
+	segment.$O\
+	syscallfmt.$O\
+	sysfile.$O\
+	sysproc.$O\
+	taslock.$O\
+	tod.$O\
+	xalloc.$O\
+	userinit.$O\
+
+OBJ=\
+	l.$O\
+	vmcall.$O\
+	cga.$O\
+	fpu.$O\
+	i8253.$O\
+	i8259.$O\
+	main.$O\
+	memory.$O\
+	mmu.$O\
+	irq.$O\
+	trap.$O\
+	bootargs.$O\
+	$CONF.root.$O\
+	$CONF.rootc.$O\
+	$DEVS\
+	$PORT\
+
+LIB=\
+	/$objtype/lib/libmemlayer.a\
+	/$objtype/lib/libmemdraw.a\
+	/$objtype/lib/libdraw.a\
+	/$objtype/lib/libip.a\
+	/$objtype/lib/libsec.a\
+	/$objtype/lib/libmp.a\
+	/$objtype/lib/libc.a\
+	/$objtype/lib/libfis.a\
+	/$objtype/lib/libaml.a\
+	/$objtype/lib/libdtracy.a\
+
+ETHER=`{echo devether.c ether*.c | sed 's/\.c/.'$O'/g'}
+AUDIO=`{echo devaudio.c audio*.c | sed 's/\.c/.'$O'/g'}
+VGA=`{echo devvga.c screen.c vga*.c | sed 's/\.c/.'$O'/g'}
+SDEV=`{echo sd*.c | sed 's/\.c/.'$O'/g'}
+
+$p$CONF:	$OBJ $CONF.$O $LIB
+	$LD -o $target -T$KTZERO -l $prereq
+	size $target
+
+# don't strip the gzipped kernels -- too frustrating when that's all you have!
+$p%.gz:D:	$p%
+	gzip -9 <$p$stem >$p$stem.gz
+
+
+# pcflop and pccd need all the space they can get
+9pcflop.gz:D: 9pcflop
+	strip -o /fd/1 9pcflop | gzip -9 >9pcflop.gz
+
+9pccd.gz:D: 9pccd
+	strip -o /fd/1 9pccd | gzip -9 >9pccd.gz
+
+
+install:V:	$p$CONF
+	cp $p$CONF /$objtype/
+	for(i in $EXTRACOPIES)
+		import $i / /n/$i && cp $p$CONF $p$CONF.gz /n/$i/$objtype/
+
+<../boot/bootmkfile
+<../port/portmkfile
+<|../port/mkbootrules $CONF
+
+$ETHER: 			../port/etherif.h ../port/netif.h
+$AUDIO:				../port/audioif.h
+ether8003.$O ether8390.$O:	ether8390.h
+etheryuk.$O:			yukdump.h
+$VGA mouse.$O:			screen.h /sys/include/memdraw.h
+vgavesa.$O:			/386/include/ureg.h
+devfloppy.$O: 			floppy.h
+mp.$O:				apbootstrap.i
+apic.$O archmp.$O mp.$O:	mp.h
+squidboy.$O:			mp.h
+$SDEV pmmc.$O:			../port/sd.h
+sd53c8xx.$O:			sd53c8xx.i
+sdiahci.$O:			ahci.h ../port/led.h
+devaoe.$O sdaoe.$O:		../port/aoe.h
+main.$O:			rebootcode.i
+wavelan.$O:			wavelan.c ../pc/wavelan.c ../pc/wavelan.h ../port/etherif.h ../port/netif.h
+etherwavelan.$O:		etherwavelan.c ../pc/wavelan.h
+devusb.$O usbuhci.$O usbohci.$O usbehci.$O usbehcipc.$O usbxhci.$O: ../port/usb.h
+usbehci.$O usbehcipc.$O:	usbehci.h
+trap.$O main.$O:		/sys/include/tos.h
+uartaxp.$O:			uartaxp.i
+ether8169.$O:			../port/ethermii.h
+etherdp83820.$O:		../port/ethermii.h
+etherigbe.$O:			../port/ethermii.h
+ethervgbe.$O:			../port/ethermii.h
+ethervt6102.$O:			../port/ethermii.h
+ethervt6105m.$O:		../port/ethermii.h
+etherm10g.$O:			etherm10g2k.i etherm10g4k.i
+etherwpi.$O:			../port/wifi.h
+etherrt2860.$O: 		../port/wifi.h
+l.$O rebootcode.$O apbootstrap.$O:	mem.h
+pcipc.$O pcibios.$O:		../port/pci.h io.h
+
+initcode.out:		init9.$O initcode.$O /$objtype/lib/libc.a
+	$LD -l -R1 -s -o $target $prereq
+
+rebootcode.out:		rebootcode.$O
+	$LD -l -R4 -s -o $target -T$REBOOTADDR -H3 $prereq
+
+apbootstrap.out:	apbootstrap.$O
+	$LD -l -R4 -s -o $target -T$APBOOTSTRAP -H3 $prereq
+
+sd53c8xx.i:	sd53c8xx.n
+	aux/na $prereq > $target
+
+uartaxp.i:	a100p.cp
+	{echo 'static uchar uartaxpcp[] = {'
+	 xd -1x $prereq |
+		sed -e 's/^[0-9a-f]+ //' -e '/^$/d' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
+	 echo '};'
+	} > $target
+
+etherm10g%.i:	etherm10g%.fw
+	{echo 'static char fw'^$stem^'[] = {'
+	 xd -1x $prereq |
+		sed -e 's/^[0-9a-f]+ //' -e '/^$/d' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
+	 echo '};'
+	} > $target
+
+acid:V:
+	8c -a -w -I. i8253.c>acid
+
+%.checkether:VQ:
+	for (i in ether*.c){
+		x=`{echo $i | sed 's/\.c//'}
+		if(! ~ $x ether8390 && ! grep -s '^	'^$x^'([ 	]|$)' $stem)
+			echo $x not included in $stem
+	}
+	exit 0
+
+%.checkvga:VQ:
+	for (i in vga*.c){
+		x=`{echo $i | sed 's/\.c//'}
+		if(! ~ $x vga vgax vgasavage && ! grep -s '^	'^$x^'([ 	]|$)' $stem)
+			echo $x not included in $stem
+	}
+	exit 0
+
+checkdist:VQ:
+	for(i in pcdisk pcflop)
+	for(j in checkvga checkether)
+		mk $i.$j

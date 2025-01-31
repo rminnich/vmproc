@@ -695,7 +695,7 @@ threadmain(int argc, char **argv)
 	loadkernel(argv[0]);
 	pciinit();
 
-	vgainit(newwin);
+	if (0)vgainit(newwin);
 	for(i = 0; i < edevn; i++)
 		if(edev[i](edevaux[i]) < 0)
 			sysfatal("%s: %r", edevt[i]);
