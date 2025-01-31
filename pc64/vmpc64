@@ -17,12 +17,10 @@ dev
 	kprof
 	fs
 
-	draw		screen vga vgax vgasoft
-	mouse		mouse
-	kbd
-	vga		pci
-
-	uart
+#	draw		screen vga vgax vgasoft
+#	mouse		mouse
+#	kbd
+#	vga		pci
 	
 	segment
 	vmcall
@@ -37,14 +35,12 @@ misc
 	archmp		mp apic squidboy
 	mtrr
 
-	uarti8250
-	uartisa
-	uartpci		pci
+	vmuart
 
-	vgasoft		=cur swcursor
-	vgaigfx		+cur
-	vgaradeon	+cur
-	vgavesa
+#	vgasoft		=cur swcursor
+#	vgaigfx		+cur
+#	vgaradeon	+cur
+#	vgavesa
 
 	dtracysys
 	dtracytimer
