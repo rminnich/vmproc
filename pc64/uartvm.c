@@ -20,7 +20,6 @@ struct {
 	Lock txlock;
 } vmcons;
 
-Uart *consuart;
 /*
  * Debug print to vm "emergency console".
  * Output only appears if vm is built with verbose=y
@@ -47,8 +46,8 @@ static void kick(Uart*);
  *   - from iprint() for messages from interrupt routines
  * If ring is full, just throw extra output away.
  */
-void
-uartputs(char *s, int n)
+static void
+vmuartputs(char *s, int n)
 {
 
 	ilock(&vmcons.txlock);
@@ -156,12 +155,6 @@ vmgetc(Uart*)
 	return 0;
 }
 
-int
-uartgetc(void)
-{
-	return 0;
-}
-
 PhysUart vmphysuart = {
 	.name		= "vmuart",
 
@@ -196,6 +189,7 @@ i8250console(void)
 {
 	Uart *uart;
 
+	vmuartputs("VM\n", 3);
 	uartputs("PUTIT\n", 7);
 	// always enable.
 	uart = &vmuart;

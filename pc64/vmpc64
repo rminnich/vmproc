@@ -21,6 +21,7 @@ dev
 #	mouse		mouse
 #	kbd
 #	vga		pci
+	uart
 	
 	segment
 	vmcall
@@ -35,7 +36,8 @@ misc
 	archmp		mp apic squidboy
 	mtrr
 
-	vmuart
+	uarti8250
+#	uartvm
 
 #	vgasoft		=cur swcursor
 #	vgaigfx		+cur
