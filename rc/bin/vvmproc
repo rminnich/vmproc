@@ -1,0 +1,9 @@
+#!/bin/rc
+vmx -w text -c /fd/0,/fd/1  -M 1G 9vmpc64 'console=0'
+exit 0
+
+vmx -w text -c /dev/cons  9vmpc64 'console=0'
+exit
+vmx -w text -c /dev/cons  9vmpc64 'console=0'
+vmx -D -D -V -w text -c /dev/cons  9vmpc64 'console=0'
+vmx -w text -c /dev/cons -d /usr/glenda/9front-10811.amd64.iso 9vpc64 'console=0'

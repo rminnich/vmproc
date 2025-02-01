@@ -571,6 +571,11 @@ uartwrite(Chan *c, void *buf, long n, vlong)
 
 	switch(NETTYPE(c->qid.path)){
 	case Ndataqid:
+	{
+		int ret;
+		ret = vmcallwritefd(1, buf, n, -1);
+		print("vmcallwritefd %d\n", ret);
+	}
 		qlock(p);
 		if(waserror()){
 			qunlock(p);
@@ -837,6 +842,9 @@ uartgetc(void)
 void
 uartputc(int c)
 {
+	vmcall(c);
+	vmcall('1');
+	
 	if(consuart == nil || consuart->phys->putc == nil)
 		return;
 	consuart->phys->putc(consuart, c);
@@ -847,11 +855,16 @@ uartputs(char *s, int n)
 {
 	char *e;
 
+	if (0){
+		int ret = vmcallwritefd(1, s, n, -1);
+		print("uartputs vmcallwritefd: %d\n", ret);
+	}
 	if(consuart == nil || consuart->phys->putc == nil)
 		return;
 
 	e = s+n;
 	for(; s<e; s++){
+		vmcall('=');
 		if(*s == '\n')
 			consuart->phys->putc(consuart, '\r');
 		consuart->phys->putc(consuart, *s);
