@@ -295,13 +295,13 @@ vmcallclose(Chan *c)
 	vfree("vmcallwrite vec", vec);
 }
 
-static long
-vmcallread(Chan *c, void *a, long n, vlong off)
+long
+vmcallreadfd(ulong fd, void *a, long n, vlong off)
 {
 	char *err;
 	void *v;
 	uvlong *vec = valloc("vmcallwrite vec", 8*sizeof(uvlong));
-	vmdebug("vmcallread c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
+	vmdebug("vmcallreadfd fd %lud a %p n %ld off %lld\n", fd, a, n, off);
 	v = valloc("vmcallread", n);
 	err = valloc("vmcallread error", ERRMAX);
 	if (waserror()) {
@@ -311,7 +311,7 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 		vfree("vmcallread vec", vec);
 		return -1;
 	}
-	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, ERRMAX, (uvlong)4, (uvlong)c->dev, PADDR(v), (uvlong)n, (uvlong)off));
+	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, ERRMAX, (uvlong)4, (uvlong)fd, PADDR(v), (uvlong)n, (uvlong)off));
 	vmdebug("ret is %d\n", ret);
 	if ((int)ret == -1) {
 		error("read"); 
@@ -333,15 +333,22 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	vfree("vmcallread vec", vec);
 	return (long)ret;
 }
-
 static long
-vmcallwrite(Chan *c, void *a, long n, vlong off)
+vmcallread(Chan *c, void *a, long n, vlong off)
+{
+	int fd = c->dev;
+	vmdebug("vmcallread c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
+	return vmcallreadfd(fd, a, n, off);
+}
+
+long
+vmcallwritefd(ulong fd, void *a, long n, vlong off)
 {
 	char *err;
 	uvlong *vec = valloc("vmcallwrite vec", 8*sizeof(uvlong));
 	void *v = valloc("vmcallwrite", n);
 	err = valloc("vmcallwrite error", ERRMAX);
-	vmdebug("vmcallwrite: c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
+	vmdebug("vmcallwrite: fd %lud a %p n %ld off %lld\n", fd, a, n, off);
 	if (waserror()) {
 		vfree("vmcallread", v);
 		kstrcpy(up->errstr, err, ERRMAX);
@@ -350,7 +357,7 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 		return -1;
 	}
 	memmove(v, a, n);
-	int ret = (int)vmcall(vmcallargs(vec, PWRITE, err, ERRMAX, 4, c->dev, PADDR(v), n, off));
+	int ret = (int)vmcall(vmcallargs(vec, PWRITE, err, ERRMAX, 4, fd, PADDR(v), n, off));
 	if (ret < 0)
 		error(err);
 	poperror();
@@ -358,6 +365,14 @@ vmcallwrite(Chan *c, void *a, long n, vlong off)
 	vfree("vmcallwrite error", err);
 	vfree("vmcallwrite vec", vec);
 	return (long)ret;
+}
+
+static long
+vmcallwrite(Chan *c, void *a, long n, vlong off)
+{
+	ulong fd = c->dev;
+	vmdebug("vmcallwrite: c %p fd %lud a %p n %ld off %lld\n", c, c->dev, a, n, off);
+	return vmcallwritefd(fd, a, n, off);
 }
 
 
