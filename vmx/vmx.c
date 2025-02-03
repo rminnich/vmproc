@@ -18,6 +18,11 @@ struct VmxNotif {
 	void *arg;
 };
 
+int numioprocs, maxioprocs = 64; /// XXX make it an opt later.
+Channel *ioprocs;
+void pushiop(Ioproc *iop);
+
+
 int mainstacksize = 65536;
 
 void *
@@ -690,6 +695,7 @@ threadmain(int argc, char **argv)
 		if(fbaddr != (u32int) fbaddr || (u32int)(fbaddr+fbsz) < fbaddr) sysfatal("framebuffer must be within first 4 GB");
 		mkregion(fbaddr, fbaddr+fbsz, REGALLOC|REGRWX);
 	}
+
 	vmxsetup();
 	mksegment(segname);
 	loadkernel(argv[0]);
@@ -704,6 +710,15 @@ threadmain(int argc, char **argv)
 	
 	if(srvname != nil) init9p(srvname);
 	if(kconfig != nil) kconfig();
+
+	/* N.B. This has to be the last thing you do, so that ioprocs see the guest memory! */
+	maxioprocs = maxioprocs < 3 ? 16 : maxioprocs;
+	ioprocs = chancreate(sizeof(void*), maxioprocs);
+	/* add three ioprocs for stdin, stdout, stderr */
+	for(int i = 0; i < 3; i++) 
+		pushiop(ioproc());
+	numioprocs = 3;
+
 	runloop();
 	exits(nil);
 }

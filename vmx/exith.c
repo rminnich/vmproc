@@ -7,9 +7,46 @@
 #include "/sys/src/libc/9syscall/sys.h"
 
 extern int vmcalldebug;
-
 int persist = 1;
-static Ioproc *iops[65536];
+
+int numioprocs;
+extern int maxioprocs;
+extern Channel *ioprocs;
+
+#pragma	   varargck    argpos	   fatal 1
+void
+panic(char *fmt,	...)
+{
+	Fmt f;
+	char buf[64];
+	va_list arg;
+	fmtfdinit(&f, 1, buf, sizeof buf);
+	fmtprint(&f, "fatal: ");
+	va_start(arg, fmt);
+	fmtvprint(&f, fmt,	arg);
+	va_end(arg);
+	fmtprint(&f, "\n");
+	fmtfdflush(&f);
+	exits("fatal error");
+}
+
+void pushiop(Ioproc *iop)
+{
+	int ret = nbsendp(ioprocs, iop);
+	if (vmcalldebug)print("pushiop: %p, sendp returns %d\n", iop, ret);
+	if (ret < 0)
+		panic("pushiop: %r");
+}
+
+Ioproc *popiop(void)
+{
+	Ioproc *iop = recvp(ioprocs);
+	if (vmcalldebug)print("popiop: %p\n", iop);
+	if (iop == nil)
+		panic("pop from %p returns nil\n", ioprocs);
+	return iop;
+}
+
 
 typedef struct ExitInfo ExitInfo;
 struct ExitInfo {
@@ -481,43 +518,6 @@ static uvlong sys(uvlong cmd)
 	}
 }
 
-static void ioprunopen(void *v)
-{
-	uvlong *sp = v;
-	int arg = 1;
-	char *err = (char *)sp[arg++];
-	int nerr = (int)sp[arg++];
-	char *name = (char *)sp[arg++];
-	int omode = (int)sp[arg];
-	// toodo: keep an ioproc around for bootstrapping.
-	// or make a chan of them ...
-	Ioproc *io = ioproc(); // bootstrap ioproc
-	debugsyscall("runopen, ioproc %p\n", io);
-	int fd = ioopen(io, name, omode);
-	debugsyscall("runopen, opened %s, fd %d\n", name, fd);
-	
-	if (fd < 0) {
-		closeioproc(io);
-		sp[0] = fd;
-		threadexits("nfg");
-	}
-	if (fd > nelem(iops)){
-		snprint(err ,nerr, "fd %d is out of range: only %d allowed", fd, nelem(iops));
-		close(fd);
-		closeioproc(io);
-		sp[0] = -1;
-		threadexits("2many fds");
-	}
-	if (iops[fd] == nil)
-		iops[fd] = io;
-	else
-		closeioproc(io);
-
-	sp[0] = (1ull<<62)|fd;
-	debugsyscall("let's exit\n");
-	threadexits("Open OK");
-}
-
 static void runopen(void *v)
 {
 	uvlong *sp = v;
@@ -530,19 +530,19 @@ static void runopen(void *v)
 	int fd = open(name, omode);
 	debugsyscall("runopen, opened %s, fd %d\n", name, fd);
 	
+	rerrstr(err, nerr);
+
 	if (fd < 0) {
 		sp[0] = fd;
 		threadexits("nfg");
 	}
-	if (fd > nelem(iops)){
-		snprint(err ,nerr, "fd %d is out of range: only %d allowed", fd, nelem(iops));
-		close(fd);
-		sp[0] = -1;
-		threadexits("2many fds");
-	}
-	if (iops[fd] == nil)
-		iops[fd] = ioproc();
 
+	if (numioprocs < maxioprocs){
+		numioprocs++;
+		pushiop(ioproc());
+	}
+
+	/* tell kernel it's done. */
 	sp[0] = (1ull<<62)|fd;
 	debugsyscall("let's exit\n");
 	threadexits("Open OK");
@@ -573,10 +573,13 @@ static void runread(void *v)
 	void *data = (void *)sp[arg++];
 	long amt = (long)sp[arg++];
 	vlong off = (vlong)sp[arg];
-	Ioproc *io = iops[fd];
-	debugsyscall("runread, ioproc %p\n", io);
+	Ioproc *io;
+	io = popiop(); // This can block, but guest will not -- this is a thread
+	debugsyscall("runread, ioproc %p, fd %d, data %p, amt %d, off %lx, err %p, nerr %d\n", io, fd, data, amt, off, err, nerr);
 	// ffs there's no readp
 	long ret = iocall(io, _ioread, fd, data, amt, off);
+	/* put it back */
+	pushiop(io);
 	debugsyscall("runread, read %d, ret %ld\n", fd, ret);
 	
 	if (ret < 0) {
