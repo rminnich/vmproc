@@ -16,18 +16,12 @@ dev
 	cap
 	kprof
 	fs
-
-#	draw		screen vga vgax vgasoft
-#	mouse		mouse
-#	kbd
-#	vga		pci
 	uart
 	
 	segment
 	vmcall
 	vmx
 	dtracy
-
 
 misc
 	pci		pcipc
@@ -38,11 +32,6 @@ misc
 
 #	uartvm
 	uarti8250
-
-#	vgasoft		=cur swcursor
-#	vgaigfx		+cur
-#	vgaradeon	+cur
-#	vgavesa
 
 	dtracysys
 	dtracytimer
