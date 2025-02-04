@@ -4,4 +4,5 @@ bind -bc vmx /sys/src/cmd/vmx
 bind -bc pc /sys/src/9/pc
 bind -bc pc64 /sys/src/9/pc64
 bind -bc boot /sys/src/9/boot
+bind -bc port /sys/src/9/port
 
