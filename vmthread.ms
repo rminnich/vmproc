@@ -39,7 +39,7 @@ Further, it is possible to implement a driver-less kernel, i.e. one which uses s
 calls, not low-level IO operations, and monitor the VMs use
 of network, disk, and other resources 
 directly, rather than trying to reconstruct its activity from its use of emulated
-devices. We discuss the implementation of this model in #V, a device which maps 
+devices. We discuss the implementation of this model in #Z, a device which maps 
 driver IO functions to system calls, communicated from guest to host via vmcall
 instructions. We have added this device support to the 9front vmx command.
 .LP
@@ -380,7 +380,7 @@ There are two standard vmcalls used in this example:
 VTH_VMCALL_PRINTC and VTH_VMCALL_EXIT; VTH_VMCALL_TEST1 is a custom 
 vmcall implemented in this same program.
 .LP
-Below we show an VMM that runs this function. 
+Below we show a VMM that runs this function. 
 This examples runs 5 VMs simultaneously, i.e. on 5 cores.
 This is a multi-threaded program running several VMs on several cores at once. 
 It is the
@@ -457,7 +457,7 @@ block the process and hence all the threads.
 A common programming idiom is to use procrfork for each
 file descriptor a program creates. 
 Libthread also allows creation of processes which do not share data memory, via proccreate:
-these share the process code image and also run their own threads, however the are entirely
+these share the process code image and also run their own threads, however, they are entirely
 independent of the other processes. We will not consider that additional
 external process model here, as it has no bearing on VMThreads.
 .LP
@@ -520,8 +520,7 @@ For example, a VM exits from a vmcall returns this:
 The wait record for vmcall provides 
 the decoded instrucion (vmcall); the PC and SP, and the instruction length.
 Nothing more is needed to know how to handle the vmcall; the handler need only 
-extract the first parameter from RBP; and succeeding parameters from the stack.
-In Akaros, the first parameter was a number; in this paper, we show it as a function pointer. 
+extract the first parameter from RBP; and succeeding parameters from the stack. 
 .FS
 By contrast, on Akaros, a VM exit causes the thread to resume in Ring 3.
 .FE
@@ -679,13 +678,6 @@ The VM is run by a VMM function, runloop, which starts the VM and calls yield(),
 Using vmcall
 .LP
 VMcall allows guests to call functions in the host. 
-In the Akaros example, this was laborious: one needed to create a function, with case statements as to the
-call number.
-.LP
-In practice, because the address space is shared, this can be far simpler: the first parameter to the vmcall
-can be a function pointer.
-We need only add the vmcall instruction handling to the vmx exit handler in exith.c, which we have 
-copied from the vmx command to libthread. 
 Because pointers in the VM and in the host are compatible, any pointers returned via the VM exit, from the VM
 itself,
 and passed back via the wait file, can be transparently used by the thread managing that exit. 
@@ -815,9 +807,6 @@ void directcall(void *arg)
 	while(1);
 }
 .P2
-This is not nearly as convenient as it needs to be, of course, but it does work.
-An obvious next step is to create a variant of libc, vlibc, which provides a limited
-number of system calls (rfork is a distant dream, for example) that call vmcall instead of syscall.
 .SH
 Using vmcall to implement kernel drivers in the guest
 .LP
@@ -833,7 +822,7 @@ any corruption of the low data memory will result in the untimely exit of the gu
 .LP
 Using host virtual addresses from the kernel requires that the kernel be linked with vmx, which is
 inflexible.
-Instead, we created a device, #V, which maps device functions to system calls.
+Instead, we created a device, #Z, which maps device functions to system calls.
 In this case, all pointers must be passed as kernel physical, not kernel virtual; 
 further, data from user programs must be copied in to kernel space, to ensure it is physically contiguous
 and to avoid Time Of Check/Time Of use (TOCTOU) problems.
@@ -854,7 +843,7 @@ We can easily see what is going on behind the virtualization veil.
 .SH
 Comparative directory performance with du
 .LP
-The performance of #V was always far superior 
+The performance of #Z was always far superior 
 in the earliest version. Using
 .P1
 time du -s
@@ -891,7 +880,7 @@ in /net or /net.alt.
 One could build a kernel with no IP stack, and no network drivers, and provide network access
 as follows:
 .P1
-bind '#V'/net /net
+bind '#Z'/net /net
 .P2
 At that point, all programs which use the network will transparently use the network
 of the VMM. The kernel running in the guest can hence be very small.
