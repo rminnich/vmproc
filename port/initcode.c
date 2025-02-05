@@ -7,7 +7,7 @@
 #include <u.h>
 #include <libc.h>
 
-char cons[] = "#Z/dev/cons";
+char cons[] = "/dev/cons";
 char fd0[] = "#Z/fd/0";
 char fd1[] = "#Z/fd/1";
 char fd2[] = "#Z/fd/2";
@@ -39,9 +39,9 @@ startboot(char*, char **argv)
 	bind(s, srv, MREPL|MCREATE);
 	bind(σ, shr, MREPL);
 
-	open(fd0, OREAD);
-	open(fd1, OWRITE);
-	open(fd2, OWRITE);
+	open(cons, OREAD);
+	open(cons, OWRITE);
+	open(cons, OWRITE);
 
 	exec(boot, argv);
 
