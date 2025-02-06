@@ -1,0 +1,288 @@
+From: glenda <glenda@maxroach>
+Date: Thu, 21 Nov 2024 05:46:19 +0000
+Subject: [PATCH 1/4] Change a few VBY2PG back to BY2PG when it looks like we
+
+are talking about the size of objects a page refers to.
+---
+diff 97e5fee23321a7a172634b67303148dd0485acf3 d1117d8c1104a9315d30cbea956f2ff4728ae538
+--- a/sys/src/9/pc64/mmu.c
++++ b/sys/src/9/pc64/mmu.c
+@@ -329,7 +329,7 @@
+ 			continue;
+ 		if(va >= KTZERO && va < (uintptr)etext)
+ 			*pte &= ~PTEWRITE;
+-		else if(va != (APBOOTSTRAP & -VBY2PG))
++		else if(va != (APBOOTSTRAP & -BY2PG))
+ 			*pte |= PTENOEXEC;
+ 		invlpg(va);
+ 	}
+@@ -595,7 +595,7 @@
+ 	uintptr va;
+ 	int o;
+ 
+-	if(pa < VBY2PG || size <= 0 || -pa < size || pa+size > VMAPSIZE){
++	if(pa < BY2PG || size <= 0 || -pa < size || pa+size > VMAPSIZE){
+ 		print("vmap pa=%llux size=%lld pc=%#p\n", pa, size, getcallerpc(&pa));
+ 		return nil;
+ 	}
+@@ -604,7 +604,7 @@
+ 	/*
+ 	 * might be asking for less than a page.
+ 	 */
+-	o = pa & (VBY2PG-1);
++	o = pa & (BY2PG-1);
+ 	pa -= o;
+ 	va -= o;
+ 	size += o;
+
+From: glenda <glenda@maxroach>
+Date: Thu, 21 Nov 2024 06:11:47 +0000
+Subject: [PATCH 2/4] Add vmproc option.
+
+The only value which will set vmproc is 1.
+Any other value leaves it at default.
+And, this panics the kernel :-)
+---
+diff d1117d8c1104a9315d30cbea956f2ff4728ae538 93dcb9b997b30b3ff9b0c53c86fa068ae4c6c997
+--- a/sys/src/9/pc64/main.c
++++ b/sys/src/9/pc64/main.c
+@@ -23,6 +23,11 @@
+ 	int i, userpcnt;
+ 	ulong kpages;
+ 
++	if(p = getconf("vmproc")){
++		if(strcmp(p, "1") == 0)
++			vmproc = 1;
++	}
++
+ 	if(p = getconf("service")){
+ 		if(strcmp(p, "cpu") == 0)
+ 			cpuserver = 1;
+
+From: glenda <glenda@maxroach>
+Date: Thu, 21 Nov 2024 21:20:59 +0000
+Subject: [PATCH 3/4] checkpoint: booting, but we are not zeroing the page completely.
+
+if we zero the whole 8k page, it panics.
+So something is overlapping.
+---
+diff 93dcb9b997b30b3ff9b0c53c86fa068ae4c6c997 a2e452e2094f469f69944c1efd8ad60409982eb1
+--- a/sys/src/9/pc64/main.c
++++ b/sys/src/9/pc64/main.c
+@@ -198,6 +198,7 @@
+ 	meminit();
+ 	ramdiskinit();
+ 	confinit();
++	print("DONE confinit\n");
+ 	xinit();
+ 	trapinit();
+ 	mathinit();
+@@ -213,13 +214,19 @@
+ 	timersinit();
+ 	if(arch->clockenable)
+ 		arch->clockenable();
++	print("procinit0\n");
+ 	procinit0();
++	print("initseg\n");
+ 	initseg();
+ 	links();
+ 	chandevreset();
++	print("call preallocpages\n");
+ 	preallocpages();
++	print("clal pageinit\n");
+ 	pageinit();
++	print("call userinit\n");
+ 	userinit();
++	print("call schedinit\n");
+ 	schedinit();
+ }
+ 
+--- a/sys/src/9/pc64/mmu.c
++++ b/sys/src/9/pc64/mmu.c
+@@ -1,4 +1,4 @@
+-#include	"u.h"
++ #include	"u.h"
+ #include	"../port/lib.h"
+ #include	"mem.h"
+ #include	"dat.h"
+@@ -18,6 +18,7 @@
+  */
+ #define VPTSZ ((vmproc?2:1)*PTSZ)
+ #define VBY2PG ((vmproc?2:1)*BY2PG)
++#define VPTPALIGN VBY2PG
+ 
+ Segdesc gdt[NGDT] =
+ {
+@@ -186,11 +187,11 @@
+ 			p = malloc(n * sizeof(MMU));
+ 			if(p == nil)
+ 				panic("mmualloc: out of memory for MMU");
+-			p->page = mallocalign(n * VPTSZ, VBY2PG, 0, 0);
++			p->page = mallocalign(n * VPTSZ, VPTPALIGN, 0, 0);
+ 			if(p->page == nil)
+ 				panic("mmualloc: out of memory for MMU pages");
+ 			for(i=1; i<n; i++){
+-				p[i].page = p[i-1].page + (1<<PTSHIFT);
++				p[i].page = p[i-1].page + ((vmproc?2:1)<<PTSHIFT);
+ 				p[i-1].next = &p[i];
+ 			}
+ 
+@@ -211,7 +212,7 @@
+ {
+ 	uintptr *page, flags;
+ 	MMU *p;
+-	
++	print("mmucreate va %p level %d index %#x\n", va, level, index);
+ 	flags = PTEWRITE|PTEVALID;
+ 	if(va < VMAP){
+ 		assert(up != nil);
+@@ -220,6 +221,7 @@
+ 		p = mmualloc();
+ 		p->index = index;
+ 		p->level = level;
++		print("pid %d p %p page %p\n", up->pid, p, page);
+ 		if(va < USTKTOP){
+ 			flags |= PTEUSER;
+ 			if(level == PML4E){
+@@ -243,11 +245,17 @@
+ 			up->kmapcount++;
+ 		}
+ 		page = p->page;
++		assert(page != nil);
++		print("memset %p for %#x\n", page, VPTSZ);
++		memset(page, 0, PTSZ);
+ 	} else {
+ 		page = rampage();
++		print("memset rampage %p for PTSZ\n", page);
++		memset(page, 0, PTSZ);
+ 	}
+-	memset(page, 0, VPTSZ);
++// HERE
+ 	table[index] = PADDR(page) | flags;
++	print("mmucreate done\n");
+ 	return page;
+ }
+ 
+@@ -663,7 +671,6 @@
+ 	vlong tsize, psize;
+ 	ulong np, nt;
+ 	int i;
+-
+ 	np = 0;
+ 	for(i=0; i<nelem(conf.mem); i++){
+ 		cm = &conf.mem[i];
+@@ -672,12 +679,12 @@
+ 	nt = np / 50;	/* 2% for mmupool */
+ 	np -= nt;
+ 
+-	nt = (uvlong)nt*VBY2PG / (sizeof(MMU)+VPTSZ);
+-	tsize = (uvlong)nt * (sizeof(MMU)+VPTSZ);
++	nt = (uvlong)nt*BY2PG / (sizeof(MMU)+PTSZ);
++	tsize = (uvlong)nt * (sizeof(MMU)+PTSZ);
+ 
+-	psize = (uvlong)np * VBY2PG;
+-	psize += sizeof(Page) + VBY2PG;
+-	psize = (psize / (sizeof(Page)+VBY2PG)) * sizeof(Page);
++	psize = (uvlong)np * BY2PG;
++	psize += sizeof(Page) + BY2PG;
++	psize = (psize / (sizeof(Page)+BY2PG)) * sizeof(Page);
+ 
+ 	psize += tsize;
+ 	psize = ROUND(psize, PGLSZ(1));
+@@ -685,13 +692,13 @@
+ 	for(i=0; i<nelem(conf.mem); i++){
+ 		cm = &conf.mem[i];
+ 		base = cm->base;
+-		top = base + (uvlong)cm->npage * VBY2PG;
+-		base += (uvlong)nkpages(cm) * VBY2PG;
++		top = base + (uvlong)cm->npage * BY2PG;
++		base += (uvlong)nkpages(cm) * BY2PG;
+ 		top &= -PGLSZ(1);
+ 		if(top <= VMAPSIZE && (vlong)(top - base) >= psize){
+ 			/* steal memory from the end of the bank */
+ 			top -= psize;
+-			cm->npage = (top - cm->base) / VBY2PG;
++			cm->npage = (top - cm->base) / BY2PG;
+ 
+ 			va = top + VMAP;
+ 			pmap(top | PTEGLOBAL|PTEWRITE|PTENOEXEC|PTEVALID, va, psize);
+@@ -699,11 +706,11 @@
+ 			palloc.pages = (void*)(va + tsize);
+ 
+ 			mmupool.nfree = mmupool.nalloc = nt;
+-			mmupool.free = (void*)(va + (uvlong)nt*VPTSZ);
++			mmupool.free = (void*)(va + (uvlong)nt*PTSZ);
+ 			for(i=0; i<nt; i++){
+ 				mmupool.free[i].page = (uintptr*)va;
+ 				mmupool.free[i].next = &mmupool.free[i+1];
+-				va += VPTSZ;
++				va += PTSZ;
+ 			}
+ 			mmupool.free[i-1].next = nil;
+ 
+
+From: glenda <glenda@maxroach>
+Date: Thu, 21 Nov 2024 23:38:53 +0000
+Subject: [PATCH 4/4] It lives
+
+We are now allocating 8K pages when vmproc is 1.
+booted to a prompt in vmx.
+---
+diff a2e452e2094f469f69944c1efd8ad60409982eb1 4df1abda858df9182710b019dcdaa1f737bdbf1a
+--- a/sys/src/9/pc64/mmu.c
++++ b/sys/src/9/pc64/mmu.c
+@@ -1,4 +1,4 @@
+- #include	"u.h"
++#include	"u.h"
+ #include	"../port/lib.h"
+ #include	"mem.h"
+ #include	"dat.h"
+@@ -188,6 +188,7 @@
+ 			if(p == nil)
+ 				panic("mmualloc: out of memory for MMU");
+ 			p->page = mallocalign(n * VPTSZ, VPTPALIGN, 0, 0);
++			print("mallocalign(%#x %p is %p\n", n * VPTSZ, VPTPALIGN, p->page);
+ 			if(p->page == nil)
+ 				panic("mmualloc: out of memory for MMU pages");
+ 			for(i=1; i<n; i++){
+@@ -221,7 +222,7 @@
+ 		p = mmualloc();
+ 		p->index = index;
+ 		p->level = level;
+-		print("pid %d p %p page %p\n", up->pid, p, page);
++		print("pid %d p %p \n", up->pid, p);
+ 		if(va < USTKTOP){
+ 			flags |= PTEUSER;
+ 			if(level == PML4E){
+@@ -704,13 +705,29 @@
+ 			pmap(top | PTEGLOBAL|PTEWRITE|PTENOEXEC|PTEVALID, va, psize);
+ 
+ 			palloc.pages = (void*)(va + tsize);
++			
++			mmupool.free = (void*)(va + (uvlong)nt*PTSZ);
+ 
++			// so far so good. No vmproc issues should affect
++			// us to this point. Now to round up the base to
++			// VTPSZ if needed, and only add the full pages.
++			// We just leak any extra for now.
++			if (vmproc == 1) {
++				print("prepagealloc start: va %p, nt %d\n", va, nt);
++				if (va & VPTSZ) {
++					va = (va + PTSZ) & ((u64int)~VPTSZ);
++					nt--;
++				}
++				// Just divide nt by 2. Any extra page will just
++				// be ignored.
++				nt /= 2;
++				print("prepagealloc va is %p, nt %d\n", va, nt);
++			}
+ 			mmupool.nfree = mmupool.nalloc = nt;
+-			mmupool.free = (void*)(va + (uvlong)nt*PTSZ);
+ 			for(i=0; i<nt; i++){
+ 				mmupool.free[i].page = (uintptr*)va;
+ 				mmupool.free[i].next = &mmupool.free[i+1];
+-				va += PTSZ;
++				va += VPTSZ;
+ 			}
+ 			mmupool.free[i-1].next = nil;
+ 
