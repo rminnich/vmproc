@@ -1,4 +1,5 @@
 #!/bin/rc
+echo root is from bind!/mnt/vmproc
 vmx -w text -c /fd/0,/fd/1  -M 1G 9vmpc64 'console=0'
 exit 0
 
