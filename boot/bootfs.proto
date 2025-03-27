@@ -36,6 +36,7 @@ rc
 		rcmain
 		reboot.rc 555 sys sys ../boot/reboot.rc
 		net.rc 555 sys sys ../boot/net.rc
+		bind.rc 555 sys sys ../boot/bind.rc
 	bin
 		ethermultilink
 		srvtls

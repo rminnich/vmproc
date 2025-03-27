@@ -3,10 +3,12 @@
 flag x +
 
 fn configbind{
+	echo "CONFIGBIND"
 	bootargs=bind!/mnt/vmproc
 }
 
 fn connectbind{
+	echo "CONNECTBIND"
 	if(~ $#* 0){
 		echo bind method needs an argument
 	}
