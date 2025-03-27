@@ -23,7 +23,9 @@ Dirtab vmcalldir[]={
 	".",	{Qdir, 0, QTDIR},	0,	DMDIR|0555,
 };
 
-// alloc and leak if it is too low.
+/* alloc and leak if it is too low.
+ * Memory below 16M is reserved for the VMM.
+ */
 static void *valloc(char *who, int amt) {
 	void *v;
 	while(PADDR(v = malloc(amt)) < 0x1000000)
@@ -46,6 +48,10 @@ static void vfree(char *who, void *p)
 	if (vdebug) print("%s:free %p\n", who, p);
 }
 
+/* Set up the args for a vmsyscall from the kernel.
+ * Or'ing with 0x8000000000000000 tells the VMM that
+ * this requests comes from the kernel, not a program.
+ */
 static uvlong vmcallargs(uvlong *vec, uvlong scallno, char *err, int nerr, int narg, ...)
 {
 	va_list ap;
@@ -78,9 +84,9 @@ vmcallattach(char *spec)
 	return c;
 }
 
-// stateless walk.
-// We will only walk one component at a time, and let the code in chan.c pick
-// up the mess.
+/* stateless walk.
+ * We will only walk one component at a time, and let the code in chan.c pick
+ * handle the details. This is the most complex function. */
 static Walkqid*
 vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -194,6 +200,7 @@ vmcallwalk(Chan *c, Chan *nc, char **name, int nname)
 	return wq;
 }
 
+/* This is the second most complex function */
 static int
 vmcallstat(Chan *c, uchar *dp, int n)
 {
@@ -274,13 +281,13 @@ vmcallclose(Chan *c)
 {
 	char *err;
 	uvlong *vec = valloc("vmcallwrite vec", 8*sizeof(uvlong));
-	// this is called right before the channel is freed.
-	// freeing aux is safe.
+	/* this is called right before the channel is freed.
+	 * freeing aux is safe. */
 	err = valloc("close err", ERRMAX);
 	vmdebug("vmcallclose c %p c->aux %p\n", c, c->aux);
 	vfree("vmcallclose", c->aux);
 	c->aux = nil;
-	// never opened?
+	/* never opened? */
 	if (c->dev == -1)
 		return;
 
@@ -295,6 +302,12 @@ vmcallclose(Chan *c)
 	vfree("vmcallwrite vec", vec);
 }
 
+/* The IO functions, at present, use a bounce buffer.
+ * Given that the average IO in Plan 9 is not that large (we measured this,
+ * in 2008, while working on curried system calls), the bounce buffer may
+ * be worth continuing to use. It greatly reduces the complexity of
+ * the code, which (reminder) is asynchrous; we would need locks on
+ * use pages, which in turn needs page table walks, ... it gets messy. */
 long
 vmcallreadfd(ulong fd, void *a, long n, vlong off)
 {
@@ -341,6 +354,10 @@ vmcallread(Chan *c, void *a, long n, vlong off)
 	return vmcallreadfd(fd, a, n, off);
 }
 
+/* vmcallwritefd can be used for, e.g., kernel console "uart". Currently,
+ * this is not really needed: a vmcall with a "system call" of < 128 causes
+ * the ascii character to be printed on fd 1. But, still, using this function to move
+ * even 32 bytes of console data is hundreds of times more efficient than iob to port 0x3f8. */
 long
 vmcallwritefd(ulong fd, void *a, long n, vlong off)
 {
