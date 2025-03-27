@@ -15,4 +15,5 @@ FILES= \
 %.view:VQ:	%.ps
 	page -w $stem.ps
 
-view: slides.view
+view: slides.ps
+	plumb slides.ps
