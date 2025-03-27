@@ -47,6 +47,7 @@ PORT=\
 OBJ=\
 	l.$O\
 	vmcall.$O\
+	stub.$O\
 	cga.$O\
 	fpu.$O\
 	i8253.$O\
