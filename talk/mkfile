@@ -1,0 +1,18 @@
+FILES= \
+	slides.ps \
+	slides.pss
+
+%.html:D:	%.ms
+	{ echo $FONTS; cat $stem.ms } | tbl | ms2html > $target
+
+%.pss:DQ:	%.ms mkfile
+	eval `{doctype $home/lib/macros.ms $stem.ms} | \
+	lp -m.9 -dstdout | awk '{print} NR==1 {print "%%BoundingBox: 0 0 507 379"}' >$target
+
+%.ps:DQ: %.ms mkfile
+	eval `{doctype $stem.ms} | lp -dstdout > $target
+
+%.view:VQ:	%.ps
+	page -w $stem.ps
+
+view: slides.view
