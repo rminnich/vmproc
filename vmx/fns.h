@@ -14,8 +14,8 @@ void settimer(vlong targ);
 void vmerror(char *, ...);
 #pragma varargck argpos vmerror 1
 #define vmdebug if(!debug) {} else vmerror
-#define vmdebug2 if(!debug>1) {} else vmerror
-#define debugsyscall if(!debug>2) {} else vmerror
+#define vmdebug2 if(!(debug>1)) {} else vmerror
+#define debugsyscall if(!vmcalldebug) {} else vmerror
 int ctl(char *, ...);
 void registermmio(uvlong, uvlong, uvlong (*)(int, uvlong, uvlong));
 void irqline(int, int);
