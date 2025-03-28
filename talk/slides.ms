@@ -63,6 +63,8 @@ Boot to single user in well under one second
 .IT
 So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
+Comparable VMMs can be millions of lines of code
+.IT
 .SS "Akaros
 .IT
 Research kernel from Berkeley
