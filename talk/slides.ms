@@ -12,20 +12,26 @@
 ..
 .nr PO 0.5i
 .nr HM 1i
-.nr PS 12
-.nr VS 14p
+.nr PS 18
+.nr VS 24p
 .nr PD 6p
 .nr LL 6.5i
 .ds CH "
 .pl 15c
 .ds RF "
 .TL
-Titel
-.AU
 VMs as threads
+.AU
+Ron Minnich
 .AI
-rminnich@gmail.com
+where you live
+.P1
+vmthreadinit(16*1024*1024, 64*1024*1024);
+static u8int brdot[] = {0xeb, 0xfe};
+vmthreadcreate(brdot, nil, 1024);
+.P2
 .PP
+
 .SS "VMs as threads
 .IT
 Until now, VMs have been treated as devices
@@ -69,36 +75,43 @@ Comparable VMMs can be millions of lines of code
 .IT
 Research kernel from Berkeley
 .IT
-Lots of new ideas but we will focus on one: “multi core process”
+In 2013, we ported significant bits of Plan 9 to Akaros, largely automated, using INRIA Coccinelle
 .IT
-Key to understanding the new Virtual Machine Model
+TCP stack, name spaces, drivers, ...
 .IT
-Multi Core Process (MCP) can be thought of as a set of cores assigned as an
-entity to a program
+This gave us a mature code base, particularly for TCP
 .IT
-Has the flavor of gang scheduling
+To some extent, what we learned with Akaros virtualization can come back to Plan 9
+.SS "Problems with Linux model
 .IT
-An MCP manages scheduling of its cores in a “2LS”
+Virtual machine is a distinct device
 .IT
-Second level scheduler, a.k.a. User level thread scheduling
+Communicates with host via IO/memory operations
 .IT
-Thread scheduling is managed in the process, i.e. this is M:N system
+Every distinct device type requires another emulator (which is why QEMU STILL has NE2000 support)
 .IT
-.SS "MCP
+Which must be intercepted and interpreted
 .IT
-Treat parallel processes as a single entity
-.IT
-Gang scheduled, no kernel thread per “pthread”/core
-.IT
-Single address space
-.IT
-The process is aware of its state
-.IT
-Number of cores, which ones are running, etc
-.IT
-Virtual machine work builds on this model
-.IT
-.SS "Virtual Machine support
+Or, must implement IOSRV / IOMMU, which gets very complex
+.SS "Virtual machines on Linux/BSD (but not OSX!)
+.PS
+V: box wid 2i "KVM/Beehive device"
+P: box "Process" at V.e+(-3,0)
+K: box "Kernel" at V.s+(-1.5,-2)
+N: box "network"
+U: box "uart"
+D: box "disk"
+G: box "graphics"
+B: box "USB"
+arrow "ioctl" from P.s to K.n
+arrow "bit twiddling" from K.n to V.s
+arrow from N.n to V.s
+arrow from U.n to V.s
+arrow from D.n to V.s
+arrow from G.n to V.s
+arrow from B.n to V.s
+.PE
+.SS "Linux/BSD Virtual Machine model
 .IT
 First, what's a VM?
 .IT
@@ -115,50 +128,33 @@ A look back is useful
 A VM could be kind of a process
 .IT
 How did we used to start processes?
-.IT
 .SS "Start process: HP MPE
 .IT
 Using CREATEPROCESS
 .IT
 Your program can call the CREATEPROCESS intrinsic to create a child
-.IT
 process.  Your program can control the creation of the child process with
-.IT
 the optional parameters itemnums and items.  The information you can pass
-.IT
 to MPE XL through itemnums/items parameter pairs include:
 .IT
- *  The names of the files to be used as $STDIN and $STDLIST for the
-.IT
+ The names of the files to be used as $STDIN and $STDLIST for the
     child process.
 .IT
- *  An option that indicates if the child process is to be activated
-.IT
+An option that indicates if the child process is to be activated
     immediately after it is created, and if the parent process should be
-.IT
     suspended automatically when the child process is activated.
 .IT
-.SS " *
-.IT
   A list of user-named executable libraries to be searched at load time
-.IT
     for required external references.
 .IT
-.SS " *  A user-created UNSAT procedure, to which all unsatisfied load-time
-.IT
+A user-created UNSAT procedure, to which all unsatisfied load-time
     external references may be directed.
+
+.SS "This is an example of a CREATEPROCESS intrinsic call:      .
 .IT
-.SS "This is an example of a CREATEPROCESS intrinsic call:
+ERRORCODE := 0;
 .IT
-.SS "          .
-.IT
-          .
-.IT
-          .
-.IT
-.SS "ERRORCODE := 0;
-.IT
-     PIN := 0;
+	PIN := 0;
 .IT
      BNAME := 'MYPROG.PUB.MYACCT';
 .IT
@@ -169,12 +165,7 @@ to MPE XL through itemnums/items parameter pairs include:
      ITEMS[1] := 1;
 .IT
      CREATEPROCESS (ERRORCODE,PIN,BNAME,ITEMNUMS,ITEMS);
-.IT
-.SS "
-.IT
-.SS "
-.IT
-Start a job: IBM
+.SS "Start a job: IBM
 .IT
 //CONCATEX JOB CLASS=6,NOTIFY=&SYSUID
 .IT
@@ -193,10 +184,7 @@ Start a job: IBM
 //CUST1  1000
 .IT
 //CUST2  1001
-.IT
-.SS "
-.IT
-Start a job on CDC
+.SS "Start a job on CDC
 .IT
    /JOB
 .IT
@@ -236,7 +224,7 @@ Start a job on CDC
 .IT
    /EOR
 .IT
-.SS "NASTRAN FILES=OPTP
+NASTRAN FILES=OPTP
 .IT
     .
 .IT
@@ -256,11 +244,7 @@ Start a job on CDC
 .IT
    /EOF
 .IT
-.SS "
-.IT
-.SS "
-.IT
-On newer mainframes
+.SS "On newer mainframes
 .IT
  <devices>
 .IT
@@ -274,19 +258,14 @@ On newer mainframes
 .IT
     <redirfilter>
 .IT
-      <usbdev class='0x08' vendor='0x1234' product='0xbeef' version='2.56'
-.IT
-allow='yes'/>
+      <usbdev class='0x08' vendor='0x1234' product='0xbeef' version='2.56'allow='yes'/>
 .IT
       <usbdev allow='no'/>
 .IT
     </redirfilter>
 .IT
   </devices>
-.IT
-.SS "
-.IT
-On Unix, in 1972
+.SS On Unix, in 1972
 .IT
 fork();
 .IT
@@ -304,7 +283,7 @@ Forking a process to list files was considered ridiculous in many places
 .IT
 Remember that “newer mainframes” slide?
 .IT
-That's from libvirt
+That's from libvirt on Linux
 .IT
 It's a tiny fraction of the total giant pile of XML for one VM
 .IT
@@ -325,7 +304,6 @@ Mountains of code
 We've recreated batch systems from mainframes for VMs
 .IT
 What's going on here?
-.IT
 .SS "Virtualization model
 .IT
 Virtualization on Linux/BSD/Unix requires a device
