@@ -22,52 +22,46 @@
 .TL
 Titel
 .AU
-The Author
-.AI
-The Mail
-.PP
-.SS "Slide Header
-.IT
-Point
-.IT
-Point
-.SS "Next Slide
-.IT
-next Point!
-.IT
-Akaros Virtualization
-.IT
 VMs as threads
+.AI
+rminnich@gmail.com
+.PP
+.SS "VMs as threads
 .IT
-Akaros team
+Until now, VMs have been treated as devices
+e.g. /dev/kvm, /dev/vmx, whatever
 .IT
-.SS "Some numbers
+Leads to really awkward abstraction
 .IT
-Kernel code: we think it’s about an additional 5? KLOC
+On Akaros, we developed a new model
+.IT
+VM is just a thread in a new protection ring -- Ring V
+.IT
+Kernel exits to Ring 3 (User Mode) or Ring V (VM)
+.SS "Get the abstraction right and all else follows
+.IT
+Akaros Kernel Code: about 5KLOC
 .IT
 Hard to tell any more, as it is integrated so completely into the process
-.IT
 model
 .IT
 But our vmx directory is 2KLOC so I multiplied by 2.5; almost certainly too
-.IT
 high
 .IT
 User libraries: about 12 KLOC
 .IT
 Includes user mode scheduler for VM threads
 .IT
-VMM: 690 LOC (not K)
+VMM: 690 LOC (not K!)
 .IT
-This is sufficient to boot full prodkernel, run borglet, run apps, use
-.IT
+This is sufficient to boot full Google production stack, schedule jobs, use 
 local disk
 .IT
 Have a gvisor-equivalent prototype that can support GR3 sentry
 .IT
 Boot to single user in well under one second
 .IT
-So fast we sometimes think it failed and returned to an akaros shell prompt
+So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
 .SS "Akaros
 .IT
@@ -78,7 +72,6 @@ Lots of new ideas but we will focus on one: “multi core process”
 Key to understanding the new Virtual Machine Model
 .IT
 Multi Core Process (MCP) can be thought of as a set of cores assigned as an
-.IT
 entity to a program
 .IT
 Has the flavor of gang scheduling
@@ -105,11 +98,11 @@ Virtual machine work builds on this model
 .IT
 .SS "Virtual Machine support
 .IT
-First, what’s a VM?
+First, what's a VM?
 .IT
 Is it an instance of opening a device in /dev?
 .IT
-No: that’s one way of implementing VMs
+No: that's one way of implementing VMs
 .IT
 How do VMs fit into the Akaros model?
 .IT
@@ -301,7 +294,7 @@ Unix made it easy and clean
 .IT
 It was also controversial because it encouraged people to use it
 .IT
-I.e. that one could, in DMR’s words, be “profligate” with processes
+I.e. that one could, in DMR's words, be “profligate” with processes
 .IT
 Forking a process to list files was considered ridiculous in many places
 .IT
@@ -309,9 +302,9 @@ Forking a process to list files was considered ridiculous in many places
 .IT
 Remember that “newer mainframes” slide?
 .IT
-That’s from libvirt
+That's from libvirt
 .IT
-It’s a tiny fraction of the total giant pile of XML for one VM
+It's a tiny fraction of the total giant pile of XML for one VM
 .IT
 Far more complex than the 1970s mainframe JCL example!
 .IT
@@ -327,9 +320,9 @@ Gigantic XML files
 .IT
 Mountains of code
 .IT
-We’ve recreated batch systems from mainframes for VMs
+We've recreated batch systems from mainframes for VMs
 .IT
-What’s going on here?
+What's going on here?
 .IT
 .SS "Virtualization model
 .IT
@@ -401,11 +394,11 @@ Virtual Machine Thread
 .IT
 Recap:
 .IT
-Akaros processes and threads are somewhat different than you’re used to
+Akaros processes and threads are somewhat different than you're used to
 .IT
 Akaros schedules sets of cores (1 or more), not processes
 .IT
-And schedules entities called ‘multi core processes’ onto those cores
+And schedules entities called ‘multi core processes' onto those cores
 .IT
 Threads are scheduled at user level onto cores
 .IT
@@ -463,7 +456,7 @@ Ring 3 and Ring V share an address space
 .IT
 Ring V is limited to 2^46 bytes
 .IT
-If we are concerned about what’s in the VM we can use this limit
+If we are concerned about what's in the VM we can use this limit
 .IT
 Run VMM starting at 2^46
 .IT
@@ -491,7 +484,7 @@ Page table pages become double-wide (x86-specific, more on this later)
 .IT
 Entering the kernel
 .IT
-Previously, there’s only IRQs, Traps, SYSENTER/SYSCALL
+Previously, there's only IRQs, Traps, SYSENTER/SYSCALL
 .IT
 Added a handler for VMEXIT, treat it like a fault
 .IT
@@ -661,11 +654,11 @@ vmresume is privileged
 .IT
 Very limited 16-bit and IO emulation
 .IT
-It’s dumb and fragile, deliberately
+It's dumb and fragile, deliberately
 .IT
 Because even vendors sometimes get it wrong: “After analyzing the problem,
 .IT
-it’s now clear what’s happening. As incredible as it is, Ryzen has buggy
+it's now clear what's happening. As incredible as it is, Ryzen has buggy
 .IT
 VME implementation; specifically, the INT” --
 .IT
@@ -677,7 +670,7 @@ Paravirt only: for now the 10x boost for virtio devices is worth it
 .IT
 .SS "Hardware assumptions
 .IT
-We’re not supporting any pre-2012 hardware
+We're not supporting any pre-2012 hardware
 .IT
 Old hardware support in, e.g., KVM makes it messy, as does their
 .IT
@@ -693,7 +686,7 @@ Require ability to support vmexit-free interrupt injection
 .IT
 Add additional pages to VMCS
 .IT
-Fun: VMCS has a size field which I’m willing to bet will always be “4k”
+Fun: VMCS has a size field which I'm willing to bet will always be “4k”
 .IT
 So they have to add pointers to the VMCS to point to other pages
 .IT
@@ -843,7 +836,7 @@ Akaros VMs are nothing like existing kernels
 .IT
 We were able to tightly integrate VMs into process model
 .IT
-It’s not a configuration option
+It's not a configuration option
 .IT
 Did not need to add it as a device
 .IT
