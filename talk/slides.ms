@@ -17,7 +17,7 @@
 .nr PD 6p
 .nr LL 6.5i
 .ds CH "
-.pl 15c
+.pl 11i
 .ds RF "
 .TL
 VMs as threads
@@ -38,6 +38,8 @@ Until now, VMs have been treated as devices
 e.g. /dev/kvm, /dev/vmx, whatever
 .IT
 Leads to really awkward abstraction
+.IT
+Makes a local resource (a core) look like a remote batch device
 .IT
 On Akaros, we developed a new model
 .IT
@@ -63,14 +65,11 @@ VMM: 690 LOC (not K!)
 This is sufficient to boot full Google production stack, schedule jobs, use 
 local disk
 .IT
-Have a gvisor-equivalent prototype that can support GR3 sentry
-.IT
 Boot to single user in well under one second
 .IT
 So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
-Comparable VMMs can be millions of lines of code
-.IT
+Comparable VMMs are far larger (100 to 1000 times)
 .SS "Akaros
 .IT
 Research kernel from Berkeley
@@ -95,14 +94,14 @@ Which must be intercepted and interpreted
 Or, must implement IOSRV / IOMMU, which gets very complex
 .SS "Virtual machines on Linux/BSD (but not OSX!)
 .PS
-V: box wid 2i "KVM/Beehive device"
-P: box "Process" at V.e+(-3,0)
-K: box "Kernel" at V.s+(-1.5,-2)
-N: box "network"
-U: box "uart"
-D: box "disk"
-G: box "graphics"
-B: box "USB"
+V: box wid 3i "KVM/Beehive device"
+P: box wid 2i "Process" with .e at V.w+(-1,0)
+K: box wid 1i "Kernel" with .n at P.s+(0,-2)
+N: box wid 1i "network"
+U: box wid 1i "uart"
+D: box wid 1i "disk"
+G: box wid 1i "graphics"
+B: box wid 1i "USB"
 arrow "ioctl" from P.s to K.n
 arrow "bit twiddling" from K.n to V.s
 arrow from N.n to V.s
@@ -137,18 +136,17 @@ process.  Your program can control the creation of the child process with
 the optional parameters itemnums and items.  The information you can pass
 to MPE XL through itemnums/items parameter pairs include:
 .IT
- The names of the files to be used as $STDIN and $STDLIST for the
-    child process.
+The names of the files to be used as $STDIN and $STDLIST for the child process.
 .IT
 An option that indicates if the child process is to be activated
-    immediately after it is created, and if the parent process should be
-    suspended automatically when the child process is activated.
+immediately after it is created, and if the parent process should be
+suspended automatically when the child process is activated.
 .IT
-  A list of user-named executable libraries to be searched at load time
-    for required external references.
+A list of user-named executable libraries to be searched at load time
+for required external references.
 .IT
 A user-created UNSAT procedure, to which all unsatisfied load-time
-    external references may be directed.
+external references may be directed.
 
 .SS "This is an example of a CREATEPROCESS intrinsic call:      .
 .IT
@@ -208,7 +206,7 @@ ERRORCODE := 0;
 .IT
    RENAME,OPTP=NPTP.
 .IT
-.SS " * RUN RESTART JOB
+ * RUN RESTART JOB
 .IT
    LINK1,INPUT2,OUTPUT,PUNCH2,UT1.
 .IT
@@ -216,34 +214,19 @@ ERRORCODE := 0;
 .IT
    NASTRAN FILES=NPTP
 .IT
-    .
-.IT
     . (Data for Checkpoint Job)
-.IT
-    .
 .IT
    /EOR
 .IT
 NASTRAN FILES=OPTP
 .IT
-    .
-.IT
-   $ READ THE RESTART DICTIONARY
-.IT
-   READFILE PUNCH1
-.IT
-    .
-.IT
    CEND
 .IT
-    .
+    Please make it stop
 .IT
     . (Data for Restart Job)
 .IT
-    .
-.IT
    /EOF
-.IT
 .SS "On newer mainframes
 .IT
  <devices>
@@ -265,7 +248,7 @@ NASTRAN FILES=OPTP
     </redirfilter>
 .IT
   </devices>
-.SS On Unix, in 1972
+.SS "On Unix, in 1972
 .IT
 fork();
 .IT
@@ -278,7 +261,6 @@ It was also controversial because it encouraged people to use it
 I.e. that one could, in DMR's words, be “profligate” with processes
 .IT
 Forking a process to list files was considered ridiculous in many places
-.IT
 .SS "Virtualization today
 .IT
 Remember that “newer mainframes” slide?
@@ -301,14 +283,14 @@ Gigantic XML files
 .IT
 Mountains of code
 .IT
-We've recreated batch systems from mainframes for VMs
+We've recreated batch systems from mainframes for VMs!
 .IT
 What's going on here?
 .SS "Virtualization model
 .IT
 Virtualization on Linux/BSD/Unix requires a device
 .IT
-Was not possible to go deeper, i.e. rework task and vm structures
+Was not possible to go deeper, i.e. rework task and vm structures (politics)
 .IT
 Device access requires privileges (usually root)
 .IT
@@ -316,7 +298,7 @@ But simple setuid approaches are dangerous
 .IT
 So we have daemons we talk to to do it for us
 .IT
-We did not want to assume current practice was the right approach
+For Akaros, we did not want anything like Linux/BSD approach
 .IT
 We ported several different VMs to Akaros while evaluating them
 .IT
@@ -326,50 +308,116 @@ We did not have restrictions on how much we could change
 .IT
 We did not want to recreate a batch system for VMs
 .IT
-So, question, what keeps VMs just being another thread in our process?
+Then, one day, during a discussion, I noticed something
+.SS "How VM page tables are done
+.PS
+PL: box ht 1i wid 2i "Page" "table" "lock"
+P4: box "pml4" with .w at last box.e
+P3:box "pml3" at last box+(1,0)
+P2:box "pml2" at last box+(1,0)
+P1:box "pml1" at last box+(1,0)
+P0: box "page" at last box+(1,-1)
+arrow from P4.e to P3.w
+arrow from P3.e to P2.w
+arrow from P2.e to P1.w
+arrow from P1.e to P0.w
+Vl: box ht 1i wid 2i "Virtual" "page table" "lock" with .n at PL.s + (0,-1)
+V4: box "eptl4" with .w at last box.e
+V3:box "eptl3" at last box+(1,0)
+V2:box "eptl2" at last box+(1,0)
+V1:box "eptl1" at last box+(1,0)
+arrow from V4.e to V3.w
+arrow from V3.e to V2.w
+arrow from V2.e to V1.w
+arrow from V1.e to P0.w
+.PE
 .IT
+two locks, one large headache
+.IT 
+and then the light went on
+.SS "Single page table
+.PS
+PL: box  ht 1i wid 2i "lock"
+P4: box "pml4" with .nw at last box.ne
+P3:box "pml3" at last box+(1,0)
+P2:box "pml2" at last box+(1,0)
+P1:box "pml1" at last box+(1,0)
+P0: box "page" at last box+(1,0)
+arrow from P4.e to P3.w
+arrow from P3.e to P2.w
+arrow from P2.e to P1.w
+arrow from P1.e to P0.w
+V4: box "eptl4" with .n at P4.s
+V3:box "eptl3" at last box+(1,0)
+V2:box "eptl2" at last box+(1,0)
+V1:box "eptl1" at last box+(1,0)
+arrow from V4.e to V3.w
+arrow from V3.e to V2.w
+arrow from V2.e to V1.w
+arrow from V1.e to P0.w
+.PE
+.IT
+One lock
+.IT
+host and guest page tables are paired in one 8kiB "double page"
+.IT
+host page table is authoritative
+.IT
+On guest faulk, walk double pages and fix faults in guest from host
+.IT
+page table root is loaded from "doublepage+0"
+.IT
+guest page table root is loaded from "doublepage+4096"
+.SS "And from there
+.IT
+If the page tables are shared that way, what's the difference between a VM and Ring 3?
+.IT
+nothing more than SRET vs VMRET
+.IT
+as long as you have the state set up, you can return to either one
+.IT
+Even better, you can jump back and forth!
 .SS "VMs as threads
 .IT
+VM Manager
+.br
 struct virtual_machine vm;
-.IT
+.br
 static int count;
-.IT
-.SS "int main(int argc, char **argv)
-.IT
+.br
+int main(int argc, char **argv)
+.br
 {
-.IT
-int  attrs = 0;
-.IT
-vthread_attr_init(&vm, attrs);
-.IT
-vthread_create(&vm, 0, vmcall, NULL);
-.IT
-.SS "        while(atomic_read(count) < 100000) {
-.IT
-        }
-.IT
-.SS "        return 0;
-.IT
+.br
+	int  attrs = 0;
+.br
+	vthread_attr_init(&vm, attrs);
+.br
+	vthread_create(&vm, 0, vmcall, NULL);
+.br
+	while(atomic_read(count) < 100000) {
+.br
+	}
+.br
+	return 0;
+.br
 }
 .IT
-.SS "static void vmcall(void *a)
-.IT
+VM thread
+.br
+static void vmcall(void *a)
+.br
 {
-.IT
-        while (atomic_add(count, 1) < 1000000) {
-.IT
-                __asm__ __volatile__("vmcall\n\t");
-.IT
-        }
-.IT
-        __asm__ __volatile__("hlt\n\t");
-.IT
+.br
+	while (atomic_add(count, 1) < 1000000) {
+.br
+			__asm__ __volatile__("vmcall\n\t");
+.br
+	}
+.br
+	__asm__ __volatile__("hlt\n\t");
+.br
 }
-.IT
-.SS "Thread
-.IT
-Virtual Machine Thread
-.IT
 .SS "In Akaros, VMs are threads
 .IT
 Recap:
