@@ -25,7 +25,7 @@ dev
 
 misc
 	pci		pcipc
-	archgeneric	devkbd i8259 i8253
+	archgeneric	devkbd
 	archacpi	mp apic squidboy ec hpet
 	archmp		mp apic squidboy
 	mtrr
