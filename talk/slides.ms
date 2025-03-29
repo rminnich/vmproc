@@ -418,65 +418,26 @@ static void vmcall(void *a)
 	__asm__ __volatile__("hlt\n\t");
 .br
 }
+.SS "Bringing this model to Plan 9
+.IT
+.SS "Graveyard
+.IT
+if needed
 .SS "In Akaros, VMs are threads
 .IT
 Recap:
 .IT
-Akaros processes and threads are somewhat different than you're used to
-.IT
-Akaros schedules sets of cores (1 or more), not processes
-.IT
-And schedules entities called ‘multi core processes' onto those cores
-.IT
-Threads are scheduled at user level onto cores
-.IT
-We have extended the thread model to include Virtual Machine Threads
+Akaros extended the thread model to include Virtual Machine Threads
 .IT
 Virtual Machine Threads (vthreads) can run:
 .IT
 Linux 4.8 (with 12 lines of patches so that we can tell it clock rates via
-.IT
 cmdline)
 .IT
 Any code that shares the Host Ring 3 address space (equivalent to Guest
-.IT
 Ring 0)
 .IT
 Gvisor
-.IT
-.SS "
-.IT
-VMs and threads as part of an MCP
-.IT
-Ring V
-.IT
-Kernel (Ring 0)
-.IT
-Ring 3
-.IT
-Ring V
-.IT
-Ring 3
-.IT
-Ring V
-.IT
-Ring 3
-.IT
-Ring V
-.IT
-Ring 3
-.IT
-Ring V
-.IT
-Ring 3
-.IT
-Single Akaros Process, which owns cores, and runs threads. Some threads run
-.IT
-in Ring 3 (normal user mode) and some run in Ring V (VMX mode). They can
-.IT
-flip modes, i.e., a thread can alternate between Ring 3 and Ring V.  They
-.IT
-share an address space, and can communicate through memory or virtio.
 .IT
 .SS "Process address space (x86)
 .IT
@@ -491,20 +452,12 @@ Run VMM starting at 2^46
 Only leave stuff in the “low” memory that is for the guest
 .IT
 Currently due to gcc limits we also enforce only Ring 3 can access to low
-.IT
 16 MiB (save for first 1 MiB -- 8086 XXX)
 .IT
 Ring 3 address space -- 2^47 bytes
 .IT
 Ring V address space -- enforced to a measly 2^46 bytes
-.IT
-Forbidden to VMs
-.IT
-Shared between Ring 3 and Ring V
-.IT
-Here is first riscv question
-.IT
-.SS "We integrate VM Threads tightly into the kernel
+.SS "Akaros integrates VM Threads tightly into the kernel
 .IT
 Paging
 .IT
@@ -518,96 +471,7 @@ Added a handler for VMEXIT, treat it like a fault
 .IT
 Return to user, whether VM or Ring 3
 .IT
-OS knew how to run a “context” for IRQs/Traps or SYSENTER
-.IT
-Added a handler to run a “VM context”
-.IT
 No arch-independent changes to scheduler or process management code
-.IT
-Added a user-level scheduler for VMs
-.IT
-Application specific scheduling, where the application is a VMM
-.IT
-454 lines
-.IT
-.SS "Paging in Linux for virtual machines
-.IT
-PML4
-.IT
-PML3
-.IT
-PML2
-.IT
-PML1
-.IT
-Process root (cr3)
-.IT
-EPT4
-.IT
-EPT3
-.IT
-EPT2
-.IT
-EPT1
-.IT
-Guest root
-.IT
-(EPT root)
-.IT
-Independent structures with their own locks, traversal functions,
-.IT
-allocators, and theme parks …
-.IT
-.SS "
-.IT
-.SS "Akaros paging on x86
-.IT
-PML4
-.IT
-PML3
-.IT
-PML2
-.IT
-PML1
-.IT
-Process root (cr3)
-.IT
-EPT4
-.IT
-EPT3
-.IT
-EPT2
-.IT
-EPT1
-.IT
-Guest root
-.IT
-(EPT root)
-.IT
-Page table roots are paired, as are page table pages (PTP)
-.IT
-PTP are 2 * 4K pages
-.IT
-Process PTP is lower (“even”) 4k
-.IT
-VM PTP is upper (“odd”) 4k
-.IT
-Lower half is for thread in Ring 3
-.IT
-Upper half is for thread in Ring V
-.IT
-Threads can jump back and forth between those modes
-.IT
-VMM/VM duality
-.IT
-Code for VM page fault and process page fault is the same code
-.IT
-Can always see PTP for VM given a process, or process given a VM
-.IT
-EPT fault looks like a normal page fault, ugly details buried in HAL (not
-.IT
-much code)
-.IT
 .SS "Entering kernel from ring 3/ring V
 .IT
 The basic API is the same in each case
@@ -619,7 +483,6 @@ In KVM, vmexit is the return value of an ioctl to start a vm
 VMM is responsible for resolving the problem, changing VM state
 .IT
 In Akaros, vmexit is like any other case where ring 3 drops to ring 0 for
-.IT
 services
 .IT
 Ring 3: traps, system call, page fault
@@ -629,18 +492,13 @@ vmexits: vmcall, EPT fault, MSR access, IO, etc
 Same style of handling in the kernel for vmexits as faults:
 .IT
 Kernel tries to resolve the fault without blocking (e.g. page fault, lookup
-.IT
 in page cache)
 .IT
 If the kernel fails, the faulting context is reflected to the user-level
-.IT
 scheduler (2LS)
 .IT
 For userspace, a VM fault is just another reflected fault
-.IT
-.SS "
-.IT
-Running a ring 3 / ring V context
+.SS "Running a ring 3 / ring V context
 .IT
 Akaros has three context types:
 .IT
@@ -653,13 +511,11 @@ Software - voluntarily created during syscalls and user-level threading.
 Think “AMD SYSV ABI”
 .IT
 VM - involuntarily created during vmexit.  Think “every register”, plus
-.IT
 exit info and guest_pcoreid
 .IT
 Returning to userspace (Ring 3 or Ring V) is always the same: proc_pop_ctx()
 .IT
 Whether or not we return to a VM or not is solely dependent on the type of
-.IT
 context
 .IT
 The kernel does maintain, per process, an array of guest physical cores
@@ -667,29 +523,15 @@ The kernel does maintain, per process, an array of guest physical cores
 Various x86 accounting not related to the running context
 .IT
 VMCS, certain MSRs (STAR, LSTAR, SFMASK, KERNEL_GS_BASE), other fun stuff
-.IT
-Userspace knows how to run contexts too!
-.IT
-Simply build the context as part of a struct uthread and try to run it
-.IT
-But on x86, it asks the kernel to run VM contexts, since vmlaunch /
-.IT
-vmresume is privileged
-.IT
 .SS "Limitations
 .IT
 64-bit only
 .IT
-Very limited 16-bit and IO emulation
-.IT
-It's dumb and fragile, deliberately
+Very limited 16-bit and IO emulation (it's dumb and fragile, deliberately)
 .IT
 Because even vendors sometimes get it wrong: “After analyzing the problem,
-.IT
 it's now clear what's happening. As incredible as it is, Ryzen has buggy
-.IT
 VME implementation; specifically, the INT” --
-.IT
 http://www.os2museum.com/wp/vme-broken-on-amd-ryzen/
 .IT
 But there is some … essential for some ops and physical page 0 support
@@ -701,7 +543,6 @@ Paravirt only: for now the 10x boost for virtio devices is worth it
 We're not supporting any pre-2012 hardware
 .IT
 Old hardware support in, e.g., KVM makes it messy, as does their
-.IT
 evolutionary approach
 .IT
 X2APIC (and hence IOMMU)
@@ -759,7 +600,6 @@ sends the Posted-interrupt notification vector as an IPI
 Fun fact
 .IT
 The “process posted interrupts” VM-execution control requires the
-.IT
 “external-interrupt exiting” VM-execution control
 .IT
 .SS "Example: Local APIC Timer
@@ -769,7 +609,6 @@ Guest OS
 MSR exit handler
 .IT
 MSR write to Timer Vector, Initial Count, Divide configuration register
-.IT
 causes exit
 .IT
 Timer Thread
@@ -832,9 +671,7 @@ __asm__  __volatile__(
 .IT
 .SS "
 .IT
-.SS "
-.IT
-Summary
+.SS "Summary
 .IT
 Akaros VMs are unlike any other VMs
 .IT
@@ -870,51 +707,24 @@ Did not need to add it as a device
 .IT
 .SS "go/akaros-vmm
 .IT
-.SS "
-.IT
-Big picture -- example for 5 threads
+.SS "Big picture -- example for 5 threads
 .IT
 Threads can see thread and VM memory
 .IT
 VMs only see their own memory
 .IT
-VMs have a Linux kernel and a single app (potentially containing many
-.IT
-processes)
-.IT
-VM
-.IT
-Thread
-.IT
-VM
-.IT
-VM
-.IT
-Thread
-.IT
-VM
-.IT
-VM
-.IT
-Thread
-.IT
+VMs have a Linux kernel and a single app (potentially containing many processes)
 .SS "Question: can we create two barriers
 .IT
 .SS "Security barriers: One
-.IT
 Process virtual memory -- all guest requests are handled here, not in
-.IT
 kernel.
 .IT
 Addresses unavailable to the guest -- hardware limitation
-.IT
 Guest physical memory
 .IT
 Process virtual memory used only for the guest
-.IT
-“EPT” range
-.IT
-(2^46)
+“EPT” range (2^46)
 .IT
 Memory above “EPT” range (2^53-2^46)
 .SS "VM virtual memory
