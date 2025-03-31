@@ -31,31 +31,16 @@ static u8int brdot[] = {0xeb, 0xfe};
 vmthreadcreate(brdot, nil, 1024);
 .P2
 .PP
-
-.SS "VMs as threads
-.IT
-Until now, VMs have been treated as devices
-e.g. /dev/kvm, /dev/vmx, whatever
-.IT
-Leads to really awkward abstraction
-.IT
-Makes a local resource (a core) look like a remote batch device
-.IT
-On Akaros, we developed a new model
-.IT
-VM is just a thread in a new protection ring -- Ring V
-.IT
-Kernel exits to Ring 3 (User Mode) or Ring V (VM)
 .SS "A quick review of VMs
 .PS
 P: box "Process"
-box wid 2i ht 1.3i "VM memory" "Registers" "Proc" with .nw at P.se +(.2i,-.1i)
+box wid 2i ht 1.3i "memory" "Registers" "Proc" with .nw at P.se +(.2i,-.1i)
 K: box "Kernel" with .n at P.s + (0,-2i)
 arrow "trap/syscall" "RETQ" <-> from P.s to K.n
 V: box "VM" with .w at P.e + (3i,0)
 L: box "Kernel" with .n at V.s + (0,-2i)
 arrow "vmexit" "vmresume" <-> from V.s to L.n
-box wid 2i ht 2i "Process memory" "Registers" "VMCS" "Guest page table" "Proc" with .nw at V.se +(.2i,-.1i)
+box wid 2i ht 2i "Memory" "Registers" "VMCS" "Guest page table" with .nw at V.se +(.2i,-.1i)
 .PE
 .IT
 Processes have state, VMs have state
@@ -70,7 +55,7 @@ VMs have a page table to map VM physical to host physical
 .IT
 Overall, however, process activation and VM activation are very similar
 .IT
-It's the implementations that add unnecessary abstraction
+It's the implementations that add unnecessary complication
 .SS "But what about VMs are different?
 .IT
 Presotto: "We have a virtual machine, it's called user mode"
@@ -85,7 +70,11 @@ VMs can take interrupts
 .IT
 VMs can create and run processes
 .IT
+VMs can run in protection modes not allowed for kernel or user mode
+.IT
 Simply put, VMs can do things kernels can, with restrictions, e.g. on page tables
+.IT
+And even some things kernels can not do
 .SS "Can VMs just do this?
 .PS
 K: box  wid 1i "kernel"
@@ -237,19 +226,6 @@ Boot to single user in well under one second
 So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
 Comparable VMMs are far larger (100 to 1000 times)
-.SS "Akaros?
-.IT
-Research kernel from Berkeley
-.IT
-In 2013, we ported significant bits of Plan 9 to Akaros, largely automated, using INRIA Coccinelle
-.IT
-	3 times, but that's another story :-)
-.IT
-TCP stack, name spaces, drivers, ...
-.IT
-This gave us a mature code base, particularly for TCP
-.IT
-To some extent, what we learned with Akaros virtualization can come back to Plan 9
 .SS "Problems with Linux model
 .IT
 Virtual machine is a distinct device
@@ -261,7 +237,6 @@ Every distinct device type requires another emulator (which is why QEMU STILL ha
 Which must be intercepted and interpreted
 .IT
 Or, must implement IOSRV / IOMMU, which gets very complex
-.SS "Virtual machines on Linux/BSD (but not OSX!)
 .PS
 V: box wid 3i "KVM/Beehive device"
 P: box wid 2i "Process" with .e at V.w+(-1,0)
@@ -296,42 +271,6 @@ A look back is useful
 A VM could be kind of a process
 .IT
 How did we used to start processes?
-.SS "Start process: HP MPE
-.IT
-Using CREATEPROCESS
-.IT
-Your program can call the CREATEPROCESS intrinsic to create a child
-process.  Your program can control the creation of the child process with
-the optional parameters itemnums and items.  The information you can pass
-to MPE XL through itemnums/items parameter pairs include:
-.IT
-The names of the files to be used as $STDIN and $STDLIST for the child process.
-.IT
-An option that indicates if the child process is to be activated
-immediately after it is created, and if the parent process should be
-suspended automatically when the child process is activated.
-.IT
-A list of user-named executable libraries to be searched at load time
-for required external references.
-.IT
-A user-created UNSAT procedure, to which all unsatisfied load-time
-external references may be directed.
-
-.SS "This is an example of a CREATEPROCESS intrinsic call:      .
-.IT
-ERRORCODE := 0;
-.IT
-	PIN := 0;
-.IT
-     BNAME := 'MYPROG.PUB.MYACCT';
-.IT
-     ITEMNUMS[1] := 3;
-.IT
-     ITEMNUMS[2] := 0;
-.IT
-     ITEMS[1] := 1;
-.IT
-     CREATEPROCESS (ERRORCODE,PIN,BNAME,ITEMNUMS,ITEMS);
 .SS "Start a job: IBM
 .IT
 //CONCATEX JOB CLASS=6,NOTIFY=&SYSUID
@@ -351,51 +290,6 @@ ERRORCODE := 0;
 //CUST1  1000
 .IT
 //CUST2  1001
-.SS "Start a job on CDC
-.IT
-   /JOB
-.IT
-   COPYBR,INPUT,INPUT1.
-.IT
-   COPYBR,INPUT,INPUT2.
-.IT
-   REWIND,INPUT1,INPUT2.
-.IT
-   * RUN CHECKPOINT JOB
-.IT
-   LINK1,INPUT1,OUTPUT,PUNCH1,UT1.
-.IT
-   * MANIPULATE FILES
-.IT
-   PACK,PUNCH1.
-.IT
-   REWIND,PUNCH1.
-.IT
-   RETURN,POOL.
-.IT
-   RENAME,OPTP=NPTP.
-.IT
- * RUN RESTART JOB
-.IT
-   LINK1,INPUT2,OUTPUT,PUNCH2,UT1.
-.IT
-   /EOR
-.IT
-   NASTRAN FILES=NPTP
-.IT
-    . (Data for Checkpoint Job)
-.IT
-   /EOR
-.IT
-NASTRAN FILES=OPTP
-.IT
-   CEND
-.IT
-    Please make it stop
-.IT
-    . (Data for Restart Job)
-.IT
-   /EOF
 .SS "On newer mainframes
 .IT
  <devices>
@@ -456,26 +350,11 @@ We've recreated batch systems from mainframes for VMs!
 .IT
 What's going on here?
 .SS "Virtualization model
-.IT
-Virtualization on Linux/BSD/Unix requires a device
-.IT
-Was not possible to go deeper, i.e. rework task and vm structures (politics)
-.IT
-Device access requires privileges (usually root)
-.IT
-But simple setuid approaches are dangerous
-.IT
-So we have daemons we talk to to do it for us
-.IT
 For Akaros, we did not want anything like Linux/BSD approach
 .IT
-We ported several different VMs to Akaros while evaluating them
+We ported five different VMs to Akaros while evaluating them
 .IT
 Gvisor, KVM, Dune, Bhyve, two others you never heard of
-.IT
-We did not have restrictions on how much we could change
-.IT
-We did not want to recreate a batch system for VMs
 .IT
 Then, one day, during a discussion, I noticed something
 .SS "How VM page tables are done
@@ -532,7 +411,7 @@ host and guest page tables are paired in one 8kiB "double page"
 .IT
 host page table is authoritative
 .IT
-On guest faulk, walk double pages and fix faults in guest from host
+On guest fault, walk double pages and fix faults in guest from host
 .IT
 page table root is loaded from "doublepage+0"
 .IT
@@ -541,7 +420,7 @@ guest page table root is loaded from "doublepage+4096"
 .IT
 If the page tables are shared that way, what's the difference between a VM and Ring 3?
 .IT
-nothing more than SRET vs VMRET
+nothing more than RETQ vs VMRESUME
 .IT
 as long as you have the state set up, you can return to either one
 .IT
