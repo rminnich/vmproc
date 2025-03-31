@@ -46,7 +46,174 @@ On Akaros, we developed a new model
 VM is just a thread in a new protection ring -- Ring V
 .IT
 Kernel exits to Ring 3 (User Mode) or Ring V (VM)
-.SS "Get the abstraction right and all else follows
+.SS "A quick review of VMs
+.PS
+P: box "Process"
+box wid 2i ht 1.3i "VM memory" "Registers" "Proc" with .nw at P.se +(.2i,-.1i)
+K: box "Kernel" with .n at P.s + (0,-2i)
+arrow "trap/syscall" "RETQ" <-> from P.s to K.n
+V: box "VM" with .w at P.e + (3i,0)
+L: box "Kernel" with .n at V.s + (0,-2i)
+arrow "vmexit" "vmresume" <-> from V.s to L.n
+box wid 2i ht 2i "Process memory" "Registers" "VMCS" "Guest page table" "Proc" with .nw at V.se +(.2i,-.1i)
+.PE
+.IT
+Processes have state, VMs have state
+.IT
+Processes have traps (involuntary), syscalls (voluntary)
+.IT
+VMs have VMEXITs (involuntary), vmcalls (voluntary)
+.IT 
+VMs have more state, 4096 bytes or more on x86
+.IT
+VMs have a page table to map VM physical to host physical
+.IT
+Overall, however, process activation and VM activation are very similar
+.IT
+It's the implementations that add unnecessary abstraction
+.SS "But what about VMs are different?
+.IT
+Presotto: "We have a virtual machine, it's called user mode"
+.IT
+That's actually kind of fair: all processes have address 0, for example
+.IT
+But VMs can do some special things
+.IT
+VMs are allowed to set up page tables
+.IT
+VMs can take interrupts
+.IT
+VMs can create and run processes
+.IT
+Simply put, VMs can do things kernels can, with restrictions, e.g. on page tables
+.SS "Can VMs just do this?
+.PS
+K: box  wid 1i "kernel"
+P: box wid 1i "process"  with .s at K.n+(0,1i)
+L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
+Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
+V: box  wid 1i "VM" with .s at P.n+(0,1i)
+M: box  wid 1i "memory" ht 1i with .nw at V.ne + (4i,0)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
+arrow "physical" "" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+
+arrow "guest physical" "" from V.e to M.w
+
+.PE
+.IT
+If VMs could do this, protection would end
+.IT
+VMs must have a map from guest physical to host physical
+.SS "How it really looks
+.PS
+K: box  wid 1i "kernel"
+P: box wid 1i "process"  with .s at K.n+(0,1i)
+L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
+Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
+V: box  wid 1i "VM" with .s at P.n+(0,1i)
+W: box  wid 1i "VM" "external" "page" "tables" ht 1.5i with .w at V.e +(1,0)
+M: box  wid 1i "memory" ht 1i with .nw at V.ne + (4i,0)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
+arrow "physical" "" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+
+arrow "guest" "" "physical" "" from V.e to W.w
+arrow "physical" "" from W.e to M.w
+
+.PE
+.SS "When VM paging is enabled ...
+.PS
+K: box  wid 1i "kernel"
+P: box wid 1i "process"  with .s at K.n+(0,1i)
+L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
+Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
+V: box  wid 1i "VM" with .s at P.n+(0,1i)
+W: box wid 1i "VM" "page" "table" ht 1.5i with .w at V.e +(1,0)
+X: box  wid 1i "VM" "external" "page" "tables" ht 1.5i with .w at W.e +(1,0)
+M: box  wid 1i "memory" ht 1i with .nw at X.ne + (1i,-2i)
+arrow "virtual" "" from K.e to L.w
+arrow "virtual" "" from P.e to Q.w
+arrow "physical" "" from L.e to M.w
+arrow "physical" from Q.e to M.w
+
+
+arrow "guest" "" "virtual" "" from V.e to W.w
+arrow "guest" "" "physical" "" from W.e to X.w
+arrow "physical" "" from X.e to M.w
+
+.PE
+.IT
+There are page tables in the VM
+.IT
+and outside the vm
+.SS "Not as simple as docs imply
+.PS
+
+F: box ht .7i "guest" "PML4"
+box ht .7i "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+M: box "Memory" ht 1.5i with .nw at last box.ne + (.4,0)
+arrow from 2nd last box.e to M.w +(0,.1)
+
+G:box ht .7i "guest" "PML3" with .n at F.s - (0,.1)
+spline -> from M.e + (0,.1) right .4 then down 4 then left 6.4 then up 2 then to G.w
+box ht .7i "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow from last box.e to M.w 
+
+H:box ht .7i "guest" "PML3" with .n at G.s - (0,.1)
+spline -> from M.e right .3 then down 3.7 then left 6.2 then up 1.5 then to H.w
+box ht .7i "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow from last box.e to M.w +(0,-.1)
+
+I:box ht .7i "guest" "PML2" with .n at H.s - (0,.1)
+spline  -> from M.e + (0,-.1) right .2 then down 3 then left 6 then up 1 then to I.w
+box ht .7i "EPT" "L4" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L3" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L2" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+box ht .7i "EPT" "L1" with .w at last box.e + (.2,0)
+arrow from 2nd last box.e to last box.w 
+arrow "physical" "" "address" from last box.e to M.s +(0,-.55) then to M.s
+
+.PE
+.IT
+Every physical address must be translated by the external page table
+.IT
+Page tables in the VM use physical addresses
+.IT
+So 4K page table pages in a VM result in a lot more memory traffic than you'd think
+.IT
+Pro tip: always use at least 1G pages in the guest!
+.SS "In Akaros, processes and VMs are a single abstraction
+.IT
+Get the abstraction right and all else follows
 .IT
 Akaros Kernel Code: about 5KLOC
 .IT
@@ -70,11 +237,13 @@ Boot to single user in well under one second
 So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
 Comparable VMMs are far larger (100 to 1000 times)
-.SS "Akaros
+.SS "Akaros?
 .IT
 Research kernel from Berkeley
 .IT
 In 2013, we ported significant bits of Plan 9 to Akaros, largely automated, using INRIA Coccinelle
+.IT
+	3 times, but that's another story :-)
 .IT
 TCP stack, name spaces, drivers, ...
 .IT
