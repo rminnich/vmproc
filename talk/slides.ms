@@ -468,25 +468,27 @@ static void vmcall(void *a)
 }
 .SS "Bringing this model to Plan 9
 .TS
-c	c	c
-l	l	l.
+c	c
+l	l.
 Task	Files	Status
-Implement double-pages
-	pc64/main.c,mmu.c	done
+Implement double-pages	/sys/src/9/pc64/
+	main.c,mmu.c,mem.h
 Implement shared thread/VM
-guest address space	cmd/vmx
-	ksetup.c
-	main.c	done
+guest address space
+add vmcall support
+to vmx command	/sys/src/cmd/vmx
+	ksetup.c,main.c
 Extend libthread to
-include vmthreads	/sys/src/libthread/
-	vmx.c
-	exith.c
-	io.c
-	nanosec.c
-	x86.c
-	vmcall.s	done
-Implement VMCALL support
-in guest (#Z)	pc/
-	devvmcall.c
-	vmcall.s	done
+include vmthreads
+Not all needed	/sys/src/libthread/
+	dat.h, fns.h, mem.h, x86.h
+	exith.c, io.c, ksetup.c, nanosec.c, 
+	virtio.c, vmx.c, vmxgdb.c, x86.c
+Implement VMCALL 
+support in guest (#Z)
+	/sys/src/9/pc/
+	devvmcall.c, vmcall.s
 .TE
+.PP "Double Page Support
+.IT
+
