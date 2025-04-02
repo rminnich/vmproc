@@ -466,6 +466,31 @@ static void vmcall(void *a)
 	__asm__ __volatile__("hlt\n\t");
 .br
 }
+.SS "The Plan 9 vmx device in 5 lines
+.IT
+/sys/src/9/pc/devvmx.c 2260 lines (Linux is 30x more code)
+.IT
+Open #X/clone
+.IT
+Set up VM with reads/writes
+.IT
+Run event loop
+.IT
+Events are mainly vmexits as strings
+.IT
+e.g. io.0xcf80003.pc.0xffffffff8111025c.sp.0xffffffff8001bec0 ...
+Type of instruction (IO) at 03f8, and other bits to know how to resume
+.IT
+.vmcall.0x0.pc.0xffffffff81110d76.sp.0xffffffff817ce560.ilen.0x3
+.IT
+The vmcall instruction, also showing ilen 3
+.IT
+Once an exit is handled, write go command to ctl
+go.pc=0xffffffff81110d79;ax=0x43
+.IT
+Note that you can set any changed registers and set any return pc
+.IT
+Overall, devvmx is quite pleasant to work with
 .SS "Bringing this model to Plan 9
 .TS
 c	c
@@ -489,6 +514,59 @@ support in guest (#Z)
 	/sys/src/9/pc/
 	devvmcall.c, vmcall.s
 .TE
-.PP "Double Page Support
+.SS "Double Page Support
 .IT
+add a 'vmproc' argument for whether to use it or not
+.IT
+Define VBY2PG (vmproc*BY2PG), for use in allocations (e.g. mmu.c)
+.IT
+	Anywhere an allocation is done, use VBY2PG instead of BY2PG
+.IT
+TODO: fix mmuput: if double pages, fill in EPTE entry (easy)
+.IT
+TODO: stop using devsegment; just use cr3+BY2PG for guest VM root (hard)
+.IT
+TODO: once that works, drop vm kproc; not needed (easy)
+.IT
+NOTE: this same technique could support dynamic page sizes, e.g., 64K superpages
+.SS "vmthread implementation in libthread
+.IT
+First, change how memory is shared
+.IT
+Instead of multiple, closely sized segments
+.IT
+Just two: low and high
+.IT
+Partly because guests can read/write address zero
+.IT
+Partly because it is a good idea to have "safe" memory for the VMM
+.IT
+So the first guest 16MiB is copied, not shared
+.IT
+Guest can call functions in the host using physical addresses
+.IT
+E.g., a kernel could call the process malloc
+.IT
+and acid could track leaks
+.PS
+P:box "process virtual" wid 1.6i
+box "0-2MiB" ht .3i wid 1.6i with .s at P.n + (0,.2i)
+box "2MiB-16MiB" ht .6i wid 1.6i with .s at last box.n
 
+Q: box "16MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
+R:box "80MiB-96MiB" ht .4i wid 1.6i with .s at last box.n
+
+S:box "devsegment" wid 1.6i with .w at P.e + (1,0)
+
+T: box "0-64MiB" ht .4i wid 1.6i with .w at Q.e + (1,0)
+U: box "64MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
+
+G:box "guest physical" wid 1.6i with .w at S.e + (1,0)
+H: box "0-16MiB" ht .8i wid 1.6i with .s at G.n + (0,.3i)
+I: box "16MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
+
+line from Q.ne to I.nw
+line from Q.se to I.sw
+arrow from R.e to U.w
+spline -> from U.e right 3 then to H.e 
+.PE
