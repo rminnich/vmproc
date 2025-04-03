@@ -23,7 +23,6 @@ int mainstacksize = 65536;
 u8int *bump;
 uvlong vmthreadmemsize = 16*1024*1024;
 u8int *vmbase = (void *)0x1000000;
-u8int *vmend = (void *)(0x1000000 + 16*1024*1024);
 u8int *vmcode;
 int debug = 0;
 
@@ -612,7 +611,6 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	vmthreadmemsize = highmemsize;
 	vmbase = (void *)0x1000000;
-	vmend = vmbase + lowmemsize;
 	sz = lowmemsize + highmemsize;
 	vmxsetup();
 	// now allocate it for realz.

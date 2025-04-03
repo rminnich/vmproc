@@ -570,3 +570,98 @@ line from Q.se to I.sw
 arrow from R.e to U.w
 spline -> from U.e right 3 then to H.e 
 .PE
+.SS "vmthreadinit
+.P1
+void
+vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
+{
+	Region *r;
+	char sn[256], buf[256];
+	uvlong sz;
+	void *gmem;
+	int fd;
+	...
+
+	cpuidinit();
+	waitch = chancreate(sizeof(char *), 32);
+	sleepch = chancreate(sizeof(ulong), 32);
+	notifch = chancreate(sizeof(VmxNotif), 16);
+	vmthreadmemsize = highmemsize;
+	vmbase = (void *)0x1000000; // 16 MiB
+	vmend = vmbase + lowmemsize;
+	sz = lowmemsize + highmemsize;
+	vmxsetup();
+	snprint(sn, sizeof(sn), "sn.%d", getpid());
+	gmem = segattach(0, sn, vmbase, sz);
+	memset(gmem, 0, sz);
+	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	vmbase = r->v;
+	bump = vmbase;
+	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
+	vmcode = (void *) r->v;
+	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
+	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+
+
+.P2
+
+.SS "vmthreadcreate
+.P1
+
+	Region *r;
+	char sn[256], buf[256];
+	uvlong sz;
+	void *gmem;
+	int fd;
+
+	debug++;
+
+	if (inited)
+		return;
+
+	quotefmtinstall();
+	mainid = threadid();
+	cpuidinit();
+	waitch = chancreate(sizeof(char *), 32);
+	sleepch = chancreate(sizeof(ulong), 32);
+	notifch = chancreate(sizeof(VmxNotif), 16);
+	vmthreadmemsize = highmemsize;
+	vmbase = (void *)0x1000000;
+	vmend = vmbase + lowmemsize;
+	sz = lowmemsize + highmemsize;
+	vmxsetup();
+	// now allocate it for realz.
+	snprint(sn, sizeof(sn), "sn.%d", getpid());
+	gmem = segattach(0, sn, vmbase, sz);
+	if(gmem == (void*)-1){
+		snprint(buf, sizeof(buf), "#g/%s", sn);
+		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
+		if(fd < 0) sysfatal("create: %r");
+		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
+		fd = open(buf, OWRITE|OTRUNC);
+		if(fd < 0) sysfatal("open: %r");
+		// attach it all. 
+		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)vmbase, sz);
+		if(write(fd, buf, strlen(buf)) < 0){
+			 sysfatal("write: %r");
+		}
+		close(fd);
+		gmem = segattach(0, sn, vmbase, sz);
+		if(gmem == (void*)-1) {
+			sysfatal("segattach: %r");
+		}
+	} 
+		memset(gmem, 0, sz);
+
+	print("mkregion %p %p %p %p \n", vmbase, nil, vmbase, vmthreadmemsize);
+	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	vmbase = r->v;
+	bump = vmbase;
+	print("region %p->%p\n", r->v, r->ve);
+	print("mkregion %p %p %p %p \n", r->ve, highmemsize, (uvlong)0x200000, lowmemsize);
+	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
+	vmcode = (void *) r->v;
+	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
+	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+
+.P2
