@@ -347,9 +347,8 @@ Gigantic XML files
 Mountains of code
 .IT
 We've recreated batch systems from mainframes for VMs!
-.IT
-What's going on here?
 .SS "Virtualization model
+.IT
 For Akaros, we did not want anything like Linux/BSD approach
 .IT
 We ported five different VMs to Akaros while evaluating them
@@ -466,7 +465,9 @@ static void vmcall(void *a)
 	__asm__ __volatile__("hlt\n\t");
 .br
 }
-.SS "Digressoin: the Plan 9 vmx device in 5 lines
+.IT
+Before we go into how we get this working on Plan 9 vmx, we need to describe it a bit
+.SS "Digression: the Plan 9 vmx device in 5 lines
 .IT
 /sys/src/9/pc/devvmx.c 2260 lines (Linux is 30x more code)
 .IT
@@ -478,19 +479,21 @@ Run event loop
 .IT
 Events are mainly vmexits as strings
 .IT
-e.g. io.0xcf80003.pc.0xffffffff8111025c.sp.0xffffffff8001bec0 ...
-Type of instruction (IO) at 03f8, and other bits to know how to resume
+e.g. io 0xcf80003 pc 0xffffffff8111025c sp 0xffffffff8001bec0 ...
 .IT
-.vmcall.0x0.pc.0xffffffff81110d76.sp.0xffffffff817ce560.ilen.0x3
+	Type of instruction (IO) at 03f8, and other bits to know how to resume
 .IT
-The vmcall instruction, also showing ilen 3
+ .vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff817ce560 ilen 0x3
+.IT
+	The vmcall instruction, also showing ilen 3
 .IT
 Once an exit is handled, write go command to ctl
-go.pc=0xffffffff81110d79;ax=0x43
+.IT
+	go pc=0xffffffff81110d79;ax=0x43
 .IT
 Note that you can set any changed registers and set any return pc
 .IT
-Overall, devvmx is quite pleasant to work with
+Let's go deeper ...
 .SS "Setup
 .IT
 Set up file descriptors
@@ -509,9 +512,7 @@ vmxsetup(void)
   int rc;
   
   ctlfd = open("#X/clone", ORDWR|ORCLOSE);
-  if(ctlfd < 0) sysfatal("open: %r");
   rc = read(ctlfd, name, sizeof(name) - 1);
-  if(rc < 0) sysfatal("read: %r");
   name[rc] = 0;
   if(segname == nil){
     segname = smprint("vm.%s", name);
@@ -520,18 +521,18 @@ vmxsetup(void)
   
   snprint(buf, sizeof(buf), "#X/%s/regs", name);
   regsfd = open(buf, ORDWR);
-  if(regsfd < 0) sysfatal("open: %r");
   
   snprint(buf, sizeof(buf), "#X/%s/map", name);
   mapfd = open(buf, OWRITE|OTRUNC);
-  if(mapfd < 0) sysfatal("open: %r");
   
   snprint(buf, sizeof(buf), "#X/%s/wait", name);
   waitfd = open(buf, OREAD);
-  if(waitfd < 0) sysfatal("open: %r");
 }
 .P2
-.SS "Wait and sleep procs convert FD IO to chan IO (example)
+.IT
+Error handling elided
+
+.SS "convert FD to chan for thread loop
 .P1
 static void
 waitproc(void *)
@@ -549,62 +550,53 @@ waitproc(void *)
 			sysfatal("read: %r");
 		p = strchr(buf, '\n');
 		if(p != nil) *p = 0;
-		if (debug > 2) print("waitproc: %s\n", buf);
-		if (0)
-			for(i = 0; i < 18; i++){
-				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
-			}
-
 		sendp(waitch, strdup(buf));
 	}
 }
 .P2
 .IT
-messages are in the form 
+Messages are in the form msg-type pc val; sp val; ilen val; [other values]
+.IT
+Commonly processed in a runloop function
+.SS "starting it, a.k.a launch
+.P1
+void
+launch(void)
+{
+	char *s;
+	s = rcflush(1); // super cool
+	if(ctl("go %s", s == nil ? "" : s) < 0)
+		...
+	getexit++;
+}
+.P2
+
 .SS "runloop
 .P1
-static int
 runloop(void)
 {
 	char *waitmsg;
 	ulong ul;
-	VmxNotif notif;
 	int ret;
 
-	lock(&timerlock);
 	proccreate(waitproc, nil, 4096);
-	proccreate(sleeperproc, nil, 4096);
 	launch();
 	for(;;){
 		enum {
 			WAIT,
-			SLEEP,
-			NOTIF,
 		};
 		Alt a[] = {
 			[WAIT] {waitch, &waitmsg, CHANRCV},
-			[SLEEP] {sleepch, &ul, CHANRCV},
-			[NOTIF] {notifch, &notif, CHANRCV},
+			...
 			{nil, nil, CHANEND}
 		};
 		switch(alt(a)){
 		case WAIT:
 			getexit--;
 			processexit(waitmsg);
-			if (state == VMEXIT)
-				return 0;
-			//free(waitmsg);
 			break;
-		case SLEEP:
-			//pitadvance();
-			//rtcadvance();
-			break;
-		case NOTIF:
-			notif.f(notif.arg);
-			break;
+		...
 		}
-		if(getexit == 0 && state == VMEXIT)
-			return 0;
 		if(getexit == 0 && state == VMRUNNING)
 			launch();
 	}
@@ -768,19 +760,12 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	...
 
 	cpuidinit();
-	waitch = chancreate(sizeof(char *), 32);
-	sleepch = chancreate(sizeof(ulong), 32);
-	notifch = chancreate(sizeof(VmxNotif), 16);
+	// create chans
 	vmthreadmemsize = highmemsize;
 	/* Starting point of segment is lowmemsize.
 	 * This ensures the guest "unshared area" can be a copy
 	 * of process memory. */
-	vmbase = (void *)lowmemsize;
-	sz = lowmemsize + highmemsize;
-	vmxsetup();
-	snprint(sn, sizeof(sn), "sn.%d", getpid());
-	gmem = segattach(0, sn, vmbase, sz);
-	memset(gmem, 0, sz);
+	... create segment lowmemsize + highmemsize based at lowmemsize
 	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
 	bump = vmbase;
@@ -788,66 +773,164 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
-
 .P2
 
 .SS "vmthreadcreate
 .P1
+int
+vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
+{
+	int i = 0x13;
 
-	Region *r;
-	char sn[256], buf[256];
-	uvlong sz;
-	void *gmem;
-	int fd;
+	rset(RPC, (uvlong)fn);
+	rset(RSP, (uvlong)vmbase + vmthreadmemsize - stacksize);
+	rset(RARG, (uvlong)arg+1);
+	// poison registers ... elided
 
-	debug++;
+    uvlong* pml4 = (uvlong*)vmbase;
 
-	if (inited)
-		return;
+    uvlong* pml3 = (uvlong*)(vmbase + BY2PG);
 
-	quotefmtinstall();
-	mainid = threadid();
-	cpuidinit();
-	waitch = chancreate(sizeof(char *), 32);
-	sleepch = chancreate(sizeof(ulong), 32);
-	notifch = chancreate(sizeof(VmxNotif), 16);
-	vmthreadmemsize = highmemsize;
-	vmbase = (void *)0x1000000;
-	vmend = vmbase + lowmemsize;
-	sz = lowmemsize + highmemsize;
-	vmxsetup();
-	// now allocate it for realz.
-	snprint(sn, sizeof(sn), "sn.%d", getpid());
-	gmem = segattach(0, sn, vmbase, sz);
-	if(gmem == (void*)-1){
-		snprint(buf, sizeof(buf), "#g/%s", sn);
-		fd = create(buf, OREAD|segrclose, DMDIR | 0777);
-		if(fd < 0) sysfatal("create: %r");
-		snprint(buf, sizeof(buf), "#g/%s/ctl", sn);
-		fd = open(buf, OWRITE|OTRUNC);
-		if(fd < 0) sysfatal("open: %r");
-		// attach it all. 
-		snprint(buf, sizeof(buf), "va %#ullx %#ullx sticky", (uvlong)vmbase, sz);
-		if(write(fd, buf, strlen(buf)) < 0){
-			 sysfatal("write: %r");
-		}
-		close(fd);
-		gmem = segattach(0, sn, vmbase, sz);
-		if(gmem == (void*)-1) {
-			sysfatal("segattach: %r");
-		}
-	} 
-		memset(gmem, 0, sz);
+    uvlong* pml2 = (uvlong*)(vmbase + 2*BY2PG);
 
-	print("mkregion %p %p %p %p \n", vmbase, nil, vmbase, vmthreadmemsize);
-	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
-	vmbase = r->v;
-	bump = vmbase;
-	print("region %p->%p\n", r->v, r->ve);
-	print("mkregion %p %p %p %p \n", r->ve, highmemsize, (uvlong)0x200000, lowmemsize);
-	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
-	vmcode = (void *) r->v;
-	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
-	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+    pml4[0] = (uvlong)pml3 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
 
+    pml3[0] = (uvlong)pml2 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
+
+    for (int i = 0; i < 512; i++) {
+        uvlong phys_addr = i * (1<<21); // 2 MiB increments
+        pml2[i] = phys_addr | PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID;
+    }
+	state = VMRUNNING;
+	runloop();
+	return 0;
+}
 .P2
+.IT
+Set PC, RSP, and RARG to the arguments passed in
+.IT
+Set up a page table
+.It
+Note we do not yet set other registers to enter in 64-bit mode
+.IT
+Sometimes it is a useful to test 64-bit entry code in a guest
+.SS "Now that it works ...
+.IT
+All kinds of things are possible: here is a host thread
+.P1
+void
+watcher(void *arg)
+{
+	uvlong *c;
+
+	c = arg;
+	print("watcher: arg is %p *c is %#llx\n", arg, *c);
+	while (! *c){
+		if (debug > 2) print(".%#llx.", *c);
+		sleep(1000);
+		yield();
+	}
+	write(1, "WX\n", 3);
+	threadexits(nil);
+}
+.P2
+.SS "Guest thread
+.P1
+void directcall(void *arg)
+{
+	extern uvlong vmcall(void*,void*,uvlong,uvlong,uvlong);
+	static int fd;	
+	char *addr = "icmp!127.1!1";
+	char buf[256];
+	static uvlong amt;
+	USED(arg);
+	vmcall(print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
+	fd = vmcall(open, "/net/cs", 2, 0, 0);
+	vmcall(print, "fd is %d\n", fd, 0, 0);
+	// and more
+}
+.P2
+.IT
+The VM guest is calling functions that are part of the code
+.IT
+Note that the functions, strings, etc. all work in the guest
+.IT
+Because guest physical is the same as host virtual
+.IT
+It is one process, and some threads are in the VM
+.IT
+This is a kind of super-container
+.SS "so we can contain a kernel
+.IT
+Can continue to use standard operations that cause exit -- outb, etc.
+.IT
+But since kernels can call functions in the host ...
+.IT
+create vmcall stub function which traps to host
+.IT
+There are 64 bits of possible operations
+.TS
+c	c
+l	l.
+vmcall argument	meaning
+<128	print the character
+0x1000	dump registers and PTEs
+0x2000-0x2100	call system call, assuming a user thread in guest
+0x1fffff	vmexit
+bit 63 set	call system call, with bit 63 clear as sysno
+all others	call low 32 bits of rarg with 4 args from stack (perilous!)
+.TE
+.IT
+The print is particularly handy in assembly
+.IT
+MOVB $48, AX
+.IT
+VMCALL
+.SS "devvmcall: map device ops to vmcalls
+.P1
+long
+vmcallreadfd(ulong fd, void *a, long n, vlong off)
+{
+	char *err;
+	void *v;
+	uvlong *vec = valloc("vmcallreadfd vec", 8*sizeof(uvlong));
+	vmdebug("vmcallreadfd fd %lud a %p n %ld off %lld\n", fd, a, n, off);
+	v = valloc("vmcallreadfd", n);
+	err = valloc("vmcallreadfd error", ERRMAX);
+	if (waserror()) {
+		vfree("vmcallread", v);
+		kstrcpy(up->errstr, err, ERRMAX);
+		vfree("vmcallread error", err);
+		vfree("vmcallread vec", vec);
+		return -1;
+	}
+	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, ERRMAX, (uvlong)4, (uvlong)fd, PADDR(v), (uvlong)n, (uvlong)off));
+	vmdebug("ret is %d\n", ret);
+	if ((int)ret == -1) {
+		error("read"); 
+	}
+	vmdebug("Spin on vec[0] %#llx\n", vec[0]);
+	while(!(vec[0] & (1ull << 62)))
+		sched();
+	vmdebug(" done Spin on vec[0] %#llx\n", vec[0]);
+
+	if ((vlong)vec[0] == -1) {
+		error("read");
+	}
+	ret = (u32int) vec[0];
+	vmdebug("ret is %d\n", (int)ret);
+	memmove(a, v, n);
+	poperror();
+	vfree("vmcallreadfd", v);
+	vfree("vmcallreadfd error", err);
+	vfree("vmcallreadfd vec", vec);
+	return (long)ret;
+}
+.P2
+.IT
+I picked this function because it shows that vmcalls are async (see sched())
+.IT
+The guest can keep going even as the host works on the read
+.IT
+
+
