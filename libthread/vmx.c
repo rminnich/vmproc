@@ -610,7 +610,10 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	vmthreadmemsize = highmemsize;
-	vmbase = (void *)0x1000000;
+	/* Starting point of segment is lowmemsize.
+	 * This ensures the guest "unshared area" can be a copy
+	 * of process memory. */
+	vmbase = (void *)lowmemsize;
 	sz = lowmemsize + highmemsize;
 	vmxsetup();
 	// now allocate it for realz.

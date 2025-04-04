@@ -466,7 +466,7 @@ static void vmcall(void *a)
 	__asm__ __volatile__("hlt\n\t");
 .br
 }
-.SS "The Plan 9 vmx device in 5 lines
+.SS "Digressoin: the Plan 9 vmx device in 5 lines
 .IT
 /sys/src/9/pc/devvmx.c 2260 lines (Linux is 30x more code)
 .IT
@@ -491,7 +491,192 @@ go.pc=0xffffffff81110d79;ax=0x43
 Note that you can set any changed registers and set any return pc
 .IT
 Overall, devvmx is quite pleasant to work with
-.SS "Bringing this model to Plan 9
+.SS "Setup
+.IT
+Set up file descriptors
+.IT
+Set up a run loop, which
+.IT
+	Sets up threadprocs and chans
+.IT
+	Runs a for loop on the guest
+.SS "Set up file descriptors
+.P1
+static void
+vmxsetup(void)
+{
+  static char buf[128], name[128];
+  int rc;
+  
+  ctlfd = open("#X/clone", ORDWR|ORCLOSE);
+  if(ctlfd < 0) sysfatal("open: %r");
+  rc = read(ctlfd, name, sizeof(name) - 1);
+  if(rc < 0) sysfatal("read: %r");
+  name[rc] = 0;
+  if(segname == nil){
+    segname = smprint("vm.%s", name);
+    segrclose = ORCLOSE;
+  }
+  
+  snprint(buf, sizeof(buf), "#X/%s/regs", name);
+  regsfd = open(buf, ORDWR);
+  if(regsfd < 0) sysfatal("open: %r");
+  
+  snprint(buf, sizeof(buf), "#X/%s/map", name);
+  mapfd = open(buf, OWRITE|OTRUNC);
+  if(mapfd < 0) sysfatal("open: %r");
+  
+  snprint(buf, sizeof(buf), "#X/%s/wait", name);
+  waitfd = open(buf, OREAD);
+  if(waitfd < 0) sysfatal("open: %r");
+}
+.P2
+.SS "Wait and sleep procs convert FD IO to chan IO (example)
+.P1
+static void
+waitproc(void *)
+{
+	static char buf[512];
+	char *p;
+	int rc;
+
+	threadsetname("waitexit");
+	for(;;){
+		int i;
+		memset(buf, 0, sizeof(buf));
+		rc = read(waitfd, buf, sizeof(buf) - 1);
+		if(rc < 0)
+			sysfatal("read: %r");
+		p = strchr(buf, '\n');
+		if(p != nil) *p = 0;
+		if (debug > 2) print("waitproc: %s\n", buf);
+		if (0)
+			for(i = 0; i < 18; i++){
+				print("Reg %d %s: %#llx\n", i, rcname[i], rget(rcname[i]));
+			}
+
+		sendp(waitch, strdup(buf));
+	}
+}
+.P2
+.IT
+messages are in the form 
+.SS "runloop
+.P1
+static int
+runloop(void)
+{
+	char *waitmsg;
+	ulong ul;
+	VmxNotif notif;
+	int ret;
+
+	lock(&timerlock);
+	proccreate(waitproc, nil, 4096);
+	proccreate(sleeperproc, nil, 4096);
+	launch();
+	for(;;){
+		enum {
+			WAIT,
+			SLEEP,
+			NOTIF,
+		};
+		Alt a[] = {
+			[WAIT] {waitch, &waitmsg, CHANRCV},
+			[SLEEP] {sleepch, &ul, CHANRCV},
+			[NOTIF] {notifch, &notif, CHANRCV},
+			{nil, nil, CHANEND}
+		};
+		switch(alt(a)){
+		case WAIT:
+			getexit--;
+			processexit(waitmsg);
+			if (state == VMEXIT)
+				return 0;
+			//free(waitmsg);
+			break;
+		case SLEEP:
+			//pitadvance();
+			//rtcadvance();
+			break;
+		case NOTIF:
+			notif.f(notif.arg);
+			break;
+		}
+		if(getexit == 0 && state == VMEXIT)
+			return 0;
+		if(getexit == 0 && state == VMRUNNING)
+			launch();
+	}
+}
+.P2
+.SS "What wait messages look like
+.IT
+io 0x3f80000 pc 0xffffffff8111022c sp 0xffffffff8001bd18 ilen 0x...
+.IT
+	IO type, address, pc, len, anything else needed
+.IT
+.vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff80036698 ilen 0x3
+.IT
+	vmcall instruction
+.IT
+Exit handler parses the text, switches out to handlers, the resumes vm
+.IT
+go pc=0xffffffff8111022d;
+.IT
+why the semicolon? Because there can be more registers!
+.IT
+go pc=0x1110050;ax=0x2badb002;bx=0x147e000;
+.IT
+go pc=0xffffffff811101ec;ax=0x60
+.IT
+I have used a lot of VM interfaces; this is not necessarily the most efficient, but it is very easy to work with
+.SS "Exit handler
+.IT
+Handler tokenizes string, gets pc, sp, ax, ilen, etc. if present
+.IT
+Finds handler in table, calls asociated function
+.IT
+If unhandled, posts exception
+.IT
+Otherwise, returns result in exceptioninfo (warning: function-local variable ...)
+.IT
+.P1
+static ExitType etypes[] = {
+	{"io", iohandler},
+	{".cpuid", cpuid},
+	{".hlt", hlt},
+	{"eptfault", eptfault},
+	{"*ack", irqackhand},
+	{".rdmsr", rdwrmsr},
+	{".wrmsr", rdwrmsr},
+	{".movdr", movdr},
+	{"#db", dbgexc},
+	{"movcr", movcr},
+	{".xsetbv", xsetbv},
+	{".vmcall", dovmcall},
+};
+.P2
+.SS "Summary
+.IT
+devvmx is very much a Plan 9 approach
+.IT
+No special daemons, file formats, binary I/O
+.IT
+Open files, write commands, read status
+.IT
+Text-oriented
+.IT
+Efficiency is a secondary consideration to clean design
+.IT
+Capable of supporting a range of kernels and guests
+.IT
+We will show how an easy way to optimize suppporting Plan 9 guests
+.IT
+E.g., we can speed up basic task such as console by 700 times with very little change
+.SS "Using vmx for vmthreads
+.IT
+Pulled several files from vmx command into libthread
 .TS
 c	c
 l	l.
@@ -570,7 +755,7 @@ line from Q.se to I.sw
 arrow from R.e to U.w
 spline -> from U.e right 3 then to H.e 
 .PE
-.SS "vmthreadinit
+.SS "vmthreadinit changes
 .P1
 void
 vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
@@ -587,8 +772,10 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 	vmthreadmemsize = highmemsize;
-	vmbase = (void *)0x1000000; // 16 MiB
-	vmend = vmbase + lowmemsize;
+	/* Starting point of segment is lowmemsize.
+	 * This ensures the guest "unshared area" can be a copy
+	 * of process memory. */
+	vmbase = (void *)lowmemsize;
 	sz = lowmemsize + highmemsize;
 	vmxsetup();
 	snprint(sn, sizeof(sn), "sn.%d", getpid());
@@ -601,7 +788,6 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
 	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
-
 
 .P2
 
