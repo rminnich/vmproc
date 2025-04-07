@@ -72,58 +72,18 @@ VMs can create and run processes
 .IT
 VMs can run in protection modes not allowed for kernel or user mode
 .IT
-Simply put, VMs can do things kernels can, with restrictions, e.g. on page tables
+Simply put, VMs can do things kernels can not do
 .IT
-And even some things kernels can not do
-.SS "Can VMs just do this?
+and things kernels CAN do (with restrictions)
+.SS "Restriction example: paging
 .PS
 K: box  wid 1i "kernel"
 P: box wid 1i "process"  with .s at K.n+(0,1i)
-L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
-Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
-V: box  wid 1i "VM" with .s at P.n+(0,1i)
-M: box  wid 1i "memory" ht 1i with .nw at V.ne + (4i,0)
-arrow "virtual" "" from K.e to L.w
-arrow "virtual" "" from P.e to Q.w
-arrow "physical" "" from L.e to M.w
-arrow "physical" from Q.e to M.w
-
-
-arrow "guest physical" "" from V.e to M.w
-
-.PE
-.IT
-If VMs could do this, protection would end
-.IT
-VMs must have a map from guest physical to host physical
-.SS "How it really looks
-.PS
-K: box  wid 1i "kernel"
-P: box wid 1i "process"  with .s at K.n+(0,1i)
-L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
-Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
-V: box  wid 1i "VM" with .s at P.n+(0,1i)
-W: box  wid 1i "VM" "external" "page" "tables" ht 1.5i with .w at V.e +(1,0)
-M: box  wid 1i "memory" ht 1i with .nw at V.ne + (4i,0)
-arrow "virtual" "" from K.e to L.w
-arrow "virtual" "" from P.e to Q.w
-arrow "physical" "" from L.e to M.w
-arrow "physical" from Q.e to M.w
-
-
-arrow "guest" "" "physical" "" from V.e to W.w
-arrow "physical" "" from W.e to M.w
-
-.PE
-.SS "When VM paging is enabled ...
-.PS
-K: box  wid 1i "kernel"
-P: box wid 1i "process"  with .s at K.n+(0,1i)
-L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(1, 0)
-Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(1,0)
-V: box  wid 1i "VM" with .s at P.n+(0,1i)
-W: box wid 1i "VM" "page" "table" ht 1.5i with .w at V.e +(1,0)
-X: box  wid 1i "VM" "external" "page" "tables" ht 1.5i with .w at W.e +(1,0)
+L: box  wid 1i "kernel" "page" "tables" ht 1.5i with .w at K.e +(3, 0)
+Q: box  wid 1i "process" " page" "tables" ht 1.5i with .w at P.e +(3,0)
+X: box  wid 1i "VM" "external" "page" "tables" ht 1.5i with .s at Q.n+(0,1i)
+W: box wid 1i "VM" "page" "table" ht 1.5i with .e at X.w +(-1,0)
+V: box  wid 1i "VM" with .e at W.w +(-1,0)
 M: box  wid 1i "memory" ht 1i with .nw at X.ne + (1i,-2i)
 arrow "virtual" "" from K.e to L.w
 arrow "virtual" "" from P.e to Q.w
@@ -137,9 +97,11 @@ arrow "physical" "" from X.e to M.w
 
 .PE
 .IT
-There are page tables in the VM
+There are page tables in the VM, and outside the vm
 .IT
-and outside the vm
+"For any virtual memory access, the original virtual address is converted in the first stage by VS-level address translation, as controlled by the vsatpregister, into a guest physical address. The guest physical address is then converted in the second stage by guest physical address translation, as controlled by the hgatpregister, into a supervisor physical address. "
+.IT
+Sounds simple!
 .SS "Not as simple as docs imply
 .PS
 
@@ -200,33 +162,7 @@ Page tables in the VM use physical addresses
 So 4K page table pages in a VM result in a lot more memory traffic than you'd think
 .IT
 Pro tip: always use at least 1G pages in the guest!
-.SS "In Akaros, processes and VMs are a single abstraction
-.IT
-Get the abstraction right and all else follows
-.IT
-Akaros Kernel Code: about 5KLOC
-.IT
-Hard to tell any more, as it is integrated so completely into the process
-model
-.IT
-But our vmx directory is 2KLOC so I multiplied by 2.5; almost certainly too
-high
-.IT
-User libraries: about 12 KLOC
-.IT
-Includes user mode scheduler for VM threads
-.IT
-VMM: 690 LOC (not K!)
-.IT
-This is sufficient to boot full Google production stack, schedule jobs, use 
-local disk
-.IT
-Boot to single user in well under one second
-.IT
-So fast we sometimes think it failed and returned to an Akaros shell prompt
-.IT
-Comparable VMMs are far larger (100 to 1000 times)
-.SS "Problems with Linux model
+.SS "The Linux model
 .IT
 Virtual machine is a distinct device
 .IT
@@ -424,6 +360,32 @@ nothing more than RETQ vs VMRESUME
 as long as you have the state set up, you can return to either one
 .IT
 Even better, you can jump back and forth!
+.SS "In Akaros, processes and VMs are a single abstraction
+.IT
+Get the abstraction right and all else follows
+.IT
+Akaros Kernel Code: about 5KLOC
+.IT
+Hard to tell any more, as it is integrated so completely into the process
+model
+.IT
+But our vmx directory is 2KLOC so I multiplied by 2.5; almost certainly too
+high
+.IT
+User libraries: about 12 KLOC
+.IT
+Includes user mode scheduler for VM threads
+.IT
+VMM: 690 LOC (not K!)
+.IT
+This is sufficient to boot full Google production stack, schedule jobs, use 
+local disk
+.IT
+Boot to single user in well under one second
+.IT
+So fast we sometimes think it failed and returned to an Akaros shell prompt
+.IT
+Comparable VMMs are far larger (100 to 1000 times)
 .SS "VMs as threads
 .IT
 VM Manager
@@ -466,7 +428,7 @@ static void vmcall(void *a)
 .br
 }
 .IT
-Before we go into how we get this working on Plan 9 vmx, we need to describe it a bit
+Before we go into how we get this working on Plan 9 vmx, we need to describe vmx a bit
 .SS "Digression: the Plan 9 vmx device in 5 lines
 .IT
 /sys/src/9/pc/devvmx.c 2260 lines (Linux is 30x more code)
@@ -502,7 +464,7 @@ Set up a run loop, which
 .IT
 	Sets up threadprocs and chans
 .IT
-	Runs a for loop on the guest
+	Runs a for loop processing guest exits
 .SS "Set up file descriptors
 .P1
 static void
@@ -548,7 +510,7 @@ waitproc(void *)
 		rc = read(waitfd, buf, sizeof(buf) - 1);
 		if(rc < 0)
 			sysfatal("read: %r");
-		p = strchr(buf, '\n');
+		p = strchr(buf, '\\n');
 		if(p != nil) *p = 0;
 		sendp(waitch, strdup(buf));
 	}
@@ -608,11 +570,11 @@ io 0x3f80000 pc 0xffffffff8111022c sp 0xffffffff8001bd18 ilen 0x...
 .IT
 	IO type, address, pc, len, anything else needed
 .IT
-.vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff80036698 ilen 0x3
+\.vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff80036698 ilen 0x3
 .IT
 	vmcall instruction
 .IT
-Exit handler parses the text, switches out to handlers, the resumes vm
+Exit handler parses the text, switches out to handlers, then resumes vm
 .IT
 go pc=0xffffffff8111022d;
 .IT
@@ -627,7 +589,7 @@ I have used a lot of VM interfaces; this is not necessarily the most efficient, 
 .IT
 Handler tokenizes string, gets pc, sp, ax, ilen, etc. if present
 .IT
-Finds handler in table, calls asociated function
+Finds handler in table, calls associated function
 .IT
 If unhandled, posts exception
 .IT
@@ -663,7 +625,7 @@ Efficiency is a secondary consideration to clean design
 .IT
 Capable of supporting a range of kernels and guests
 .IT
-We will show how an easy way to optimize suppporting Plan 9 guests
+We will show an easy way to optimize suppporting Plan 9 guests
 .IT
 E.g., we can speed up basic task such as console by 700 times with very little change
 .SS "Using vmx for vmthreads
@@ -718,7 +680,7 @@ Partly because guests can read/write address zero
 .IT
 Partly because it is a good idea to have "safe" memory for the VMM
 .IT
-So the first guest 16MiB is copied, not shared
+Low Memory (typicall 16MiB) is copied, not shared; high memory is shared
 .IT
 Guest can call functions in the host using physical addresses
 .IT
@@ -739,7 +701,7 @@ T: box "0-64MiB" ht .4i wid 1.6i with .w at Q.e + (1,0)
 U: box "64MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
 
 G:box "guest physical" wid 1.6i with .w at S.e + (1,0)
-H: box "0-16MiB" ht .8i wid 1.6i with .s at G.n + (0,.3i)
+H: box "0-16MiB" ht .9i wid 1.6i with .s at G.n + (0,.2i)
 I: box "16MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
 
 line from Q.ne to I.nw
@@ -747,15 +709,12 @@ line from Q.se to I.sw
 arrow from R.e to U.w
 spline -> from U.e right 3 then to H.e 
 .PE
-.SS "vmthreadinit changes
+.SS "vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 .P1
-void
-vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 {
 	Region *r;
 	char sn[256], buf[256];
 	uvlong sz;
-	void *gmem;
 	int fd;
 	...
 
@@ -765,42 +724,28 @@ vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
 	/* Starting point of segment is lowmemsize.
 	 * This ensures the guest "unshared area" can be a copy
 	 * of process memory. */
-	... create segment lowmemsize + highmemsize based at lowmemsize
-	r = mkregion(sn, vmbase, (uvlong)0, (uvlong)vmbase,  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
+	... create segment
+		 lowmemsize + highmemsize
+		 based at lowmemsize
+	r = mkregion(sn, vmbase, (uvlong)0,
+	 (uvlong)vmbase,
+	  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
 	vmbase = r->v;
-	bump = vmbase;
-	r = mkregion(sn, r->ve, highmemsize, (uvlong)0x200000, lowmemsize, REGALLOC|REGFREE|REGRWX);
+	r = mkregion(sn, r->ve, highmemsize,
+	 (uvlong)0x200000,
+	 lowmemsize, REGALLOC|REGFREE|REGRWX);
 	vmcode = (void *) r->v;
 	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
-	memmove(vmcode, (void *)0x200000, (uvlong)sbrk(0) - 0x200000);
+	memmove(vmcode, (void *)0x200000,
+	 (uvlong)sbrk(0) - 0x200000);
 .P2
-
-.SS "vmthreadcreate
+.SS "int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 .P1
-int
-vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 {
-	int i = 0x13;
-
 	rset(RPC, (uvlong)fn);
 	rset(RSP, (uvlong)vmbase + vmthreadmemsize - stacksize);
 	rset(RARG, (uvlong)arg+1);
 	// poison registers ... elided
-
-    uvlong* pml4 = (uvlong*)vmbase;
-
-    uvlong* pml3 = (uvlong*)(vmbase + BY2PG);
-
-    uvlong* pml2 = (uvlong*)(vmbase + 2*BY2PG);
-
-    pml4[0] = (uvlong)pml3 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
-
-    pml3[0] = (uvlong)pml2 | PTEACCESSED|PTEDIRTY|PTEWRITE|PTEVALID;
-
-    for (int i = 0; i < 512; i++) {
-        uvlong phys_addr = i * (1<<21); // 2 MiB increments
-        pml2[i] = phys_addr | PTEACCESSED|PTEDIRTY|PTESIZE|PTEGLOBAL|PTEWRITE|PTEVALID;
-    }
 	state = VMRUNNING;
 	runloop();
 	return 0;
@@ -808,10 +753,8 @@ vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
 .P2
 .IT
 Set PC, RSP, and RARG to the arguments passed in
-.IT
-Set up a page table
 .It
-Note we do not yet set other registers to enter in 64-bit mode
+Poison all registers we can
 .IT
 Sometimes it is a useful to test 64-bit entry code in a guest
 .SS "Now that it works ...
@@ -824,13 +767,12 @@ watcher(void *arg)
 	uvlong *c;
 
 	c = arg;
-	print("watcher: arg is %p *c is %#llx\n", arg, *c);
 	while (! *c){
 		if (debug > 2) print(".%#llx.", *c);
 		sleep(1000);
 		yield();
 	}
-	write(1, "WX\n", 3);
+	write(1, "WX\\n", 3);
 	threadexits(nil);
 }
 .P2
@@ -838,16 +780,17 @@ watcher(void *arg)
 .P1
 void directcall(void *arg)
 {
-	extern uvlong vmcall(void*,void*,uvlong,uvlong,uvlong);
 	static int fd;	
 	char *addr = "icmp!127.1!1";
 	char buf[256];
 	static uvlong amt;
 	USED(arg);
-	vmcall(print, "let's go, addr %p!\n", (uvlong)addr, 0, 0);
+	vmcall(print, "let's go, addr %p!\n",
+	 (uvlong)addr, 0, 0);
 	fd = vmcall(open, "/net/cs", 2, 0, 0);
 	vmcall(print, "fd is %d\n", fd, 0, 0);
 	// and more
+	done = 1;
 }
 .P2
 .IT
@@ -875,10 +818,10 @@ l	l.
 vmcall argument	meaning
 <128	print the character
 0x1000	dump registers and PTEs
-0x2000-0x2100	call system call, assuming a user thread in guest
+0x2000-0x2100	call system call, assuming ring 0 thread in guest
 0x1fffff	vmexit
-bit 63 set	call system call, with bit 63 clear as sysno
-all others	call low 32 bits of rarg with 4 args from stack (perilous!)
+>=1<<63	call system call, sysno is low 8 bits
+>=2M	call low 32 bits of rarg with 4 args from stack (perilous!)
 .TE
 .IT
 The print is particularly handy in assembly
@@ -893,7 +836,8 @@ vmcallreadfd(ulong fd, void *a, long n, vlong off)
 {
 	char *err;
 	void *v;
-	uvlong *vec = valloc("vmcallreadfd vec", 8*sizeof(uvlong));
+	uvlong *vec = valloc("vmcallreadfd vec",
+	 8*sizeof(uvlong));
 	vmdebug("vmcallreadfd fd %lud a %p n %ld off %lld\n", fd, a, n, off);
 	v = valloc("vmcallreadfd", n);
 	err = valloc("vmcallreadfd error", ERRMAX);
@@ -904,7 +848,11 @@ vmcallreadfd(ulong fd, void *a, long n, vlong off)
 		vfree("vmcallread vec", vec);
 		return -1;
 	}
-	int ret = (int)vmcall(vmcallargs(vec, PREAD, err, ERRMAX, (uvlong)4, (uvlong)fd, PADDR(v), (uvlong)n, (uvlong)off));
+	int ret = (int)vmcall(vmcallargs(vec, 
+		PREAD, err, ERRMAX,
+		 (uvlong)4, (uvlong)fd,
+		 PADDR(v), (uvlong)n,
+		 (uvlong)off));
 	vmdebug("ret is %d\n", ret);
 	if ((int)ret == -1) {
 		error("read"); 
