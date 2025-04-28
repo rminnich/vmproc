@@ -33,11 +33,11 @@ print:V: $ALLPS
 	lp -H -i0 $prereq
 
 # troff gets some scary-looking errors but they're okay
-&.ps:D:	&.ms
+&.ps:D:	&.ms mkfile
 	mac=(-ms)
 	if(~ $stem comp utf 9 contents) mac=(-ms -mnihongo)
 	{ echo $FONTS; cat $stem.ms } | pic | tbl | eqn | 
-		troff $mac | lp -dstdout > $target
+		troff $mac | dpost -p a4 > $target
 	/sys/doc/cleanps $target
 
 %.trout:D:	%.ms

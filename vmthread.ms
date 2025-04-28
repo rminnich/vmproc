@@ -1,13 +1,17 @@
 .HTML "VMThreds: virtual machines as threads in libthread"
 .TL
-VMThreads: virtual machines as threads
+VMThreads: virtual machines as threads\(dg
 .FS
-License: CC-BY-ND-SA
+\(dgLicense: CC-BY-ND-SA
 .FE
 .AU
 Ron Minnich
 .sp
 rminnich@gmail.com
+.rm CH
+.nr % 0
+.dePF
+..
 .AB
 We describe a new Virtual Machine model, VMThreads, for Plan 9, which allows Virtual Machines to be integrated into a 
 program as threads.
@@ -25,9 +29,9 @@ Guest VMs are frequently accessed over an emulated network connection, as though
 were an entirely independent system.
 .LP
 In contrast, VMThreads allows users to run virtual machines of any size, even a single
-machine instruction;
+machine instruction\(dd;
 .FS
-For example, we used a single-instruction VM guest to debug our vmcall support.
+\(ddFor example, we used a single-instruction VM guest to debug our vmcall support.
 .FE 
 a function; a set of functions comprising a driver; or a kernel.
 Because the guest VM is created as a thread, it is easy to share data structures with it.
@@ -60,7 +64,7 @@ provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
 is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
 Chip vendors have made significant changes over the last 20 years to make virtualization efficient.
-A guest VM, as measured on cloud servers, can achieve aboout 91% of the throughput of running on host; 
+A guest VM, as measured on cloud servers, can achieve about 91% of the throughput of running on host; 
 in some cases, it can even run faster.
 .LP
 On almost all modern operating systems, virtual machines (VMs) are supported by hardware,  with low level control provided  by kernels, and presented to VMMs,
@@ -89,7 +93,7 @@ vmthreadcreate((void *)brdot, nil, 1024);
 .P2
 The API is identical to the threadcreate API from libthread.
 .LP
-The rest of this paper is organized as follows: we provided an overview of virtualization; discuss
+The rest of this paper is organized as follows: we provide an overview of virtualization; discuss
 the Akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
 and show examples of its use.
@@ -122,9 +126,9 @@ of its own.
 Xen is always the host, and kernels are always the guest. In Xen, every kernel runs
 at a lower privilege level than the Xen kernel. 
 .LP
-Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used. 
+Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used\(dg. 
 .FS
-There are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
+\(dgThere are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
 .FE
 Unlike Xen, 
 KVM  VMs run as a driver in Linux.
@@ -225,6 +229,11 @@ That may look like a lot of table walking. In fact, it is worse than it appears.
 Every guest page table walk resolves to a guest physical address.
 That guest physical address must, in turn, be translated to a host physical address. 
 The process is shown below.
+For the guest page table, we show the page table levels as Page Map Level (PML), 
+ranging from 4 to 1, since PML0 is the
+guest physical page address. 
+For the guest physical to host physical, we show Extended Page Table (EPT),
+as levels 4 to 1, where EPT0 is the host physical page address. 
 .PS
 
 F: box "guest" "PML4"
@@ -308,9 +317,9 @@ open the VM device and use a file descriptor to control it.
 The separateness of the device is always apparent. The abstraction
 is complicated and not convenient.
 .SH
-Akaros virtualization: VMs as threads
+Akaros virtualization: VMs as threads\(dg
 .FS
-https://github.com/brho/akaros. See the patches starting at ddb9fa78b5d97e4107a9404f4146140ef8bf9a5a from 
+\(dghttps://github.com/brho/akaros. See the patches starting at ddb9fa78b5d97e4107a9404f4146140ef8bf9a5a from 
 April 1, 2015 and on (yes, April Fool's day!).
 .FE
 .LP
@@ -384,7 +393,8 @@ Below we show a VMM that runs this function.
 This examples runs 5 VMs simultaneously, i.e. on 5 cores.
 This is a multi-threaded program running several VMs on several cores at once. 
 It is the
-technique we use to start an SMP kernel such as Linux: each Linux core (VM guest) is a thread in the host.
+technique we use to start a multiprocessor kernel such as Linux: 
+each Linux core (VM guest) is a thread in the host.
 .P1
 int main(int argc, char **argv)
 {
@@ -429,16 +439,16 @@ is a very fast reset/reboot. Further, they add complexity to the kernel.
 .LP
 Second is the code to implement host process virtual and guest physical identity mapping.
 In Akaros, this is achieved by having every host page table page paired with a guest page table page -- 
-i.e., every page table page is now 8k, not 4k. 
+i.e., every page table page is now 8k, not 4\(dgk. 
 .FS
-People tend to worry when they hear this, but the actual impact is quite minor: 
+\(dgPeople tend to worry when they hear this, but the actual impact is quite minor: 
 on an 8 GiB machine the memory for page table pages increases by 16 MiB. 
 .FE
 On 9front, we have implemented this "double page table page" change, and
 whether it is used is controlled with a boot time command line argument. I.e., "double page page tables" do
-not require recompiling the kernel.
+not require recompiling the kernel\(dd.
 .FS
-Code avaliable at shithub.us.
+\(ddCode avaliable at shithub.us.
 .FE
 .LP
 Although we have part of the Akaros model working, 
@@ -450,7 +460,7 @@ A quick review of Plan 9 libthread
 .LP
 Plan 9 threads are lightweight, non-preemptive coroutines, running in one or more
 processes which share memory.
-Lightweight threads can be created in the current process, via theadreate; or in an external process, 
+Lightweight threads can be created in the current process, via threadreate; or in an external process, 
 via procrfork. Whether in the same process or a process created by procrfork, all memory is shared, including
 stacks. The main purpose of procrfork is to allow calls to operations, such as file I/O, that can
 block the process and hence all the threads. 
@@ -503,7 +513,6 @@ continues to increase.
  '#X/0/regs'
  '#X/0/status'
  '#X/0/wait'
- '#X/clone'
 .P2
 .LP
 Control of VMs is via commands written to the ctl file. Registers are available
@@ -513,25 +522,25 @@ the read call returns when the VM guest status changes (usually via a VMEXIT).
 For further information, see the man page on 9front.
 .LP
 The wait file information is provided as text records, delimited by newlines.
-For example, a VM exits from a vmcall returns this:
+For example, a VM that exits from a vmcall would return:
 .P1
  .vmcall 0x0 pc 0x20091a sp 0x4ffefac ilen 0x3 iinfo 0x0
 .P2
 The wait record for vmcall provides 
 the decoded instrucion (vmcall); the PC and SP, and the instruction length.
 Nothing more is needed to know how to handle the vmcall; the handler need only 
-extract the first parameter from RBP; and succeeding parameters from the stack. 
+extract the first parameter from RBP; and succeeding parameters from the stack\(dg. 
 .FS
-By contrast, on Akaros, a VM exit causes the thread to resume in Ring 3.
+\(dgBy contrast, on Akaros, a VM exit causes the thread to resume in Ring 3.
 .FE
 .LP
 The VM exit suspends the VM, and returns information about the exit via the wait file, to a
 process that is reading from it. In current implementations,
-follwing libthread convention, that function bundles up the information and writes
+following libthread convention, that function bundles up the information and writes
 it to a channel, where it comes under the domain of the lightweight threads. The process
-is used so that it can block on the wait file read without blocking the lightweight threads.
+is used so that it can block on the wait file read without blocking the lightweight threads\(dd.
 .FS
-This same technique is used in the Go runtime, but the process creation is managed by the Go runtime,
+\(ddThis same technique is used in the Go runtime, but the process creation is managed by the Go runtime,
 not by the user.
 .FE
 .LP
@@ -602,9 +611,9 @@ The memory from 2 MiB to 16 MiB is copied, not shared, between host and guest. A
 as a kernel,  must
 be loaded at 16 MiB, and be able to function with a 15 MiB hole starting at 1 MiB. 
 Fortunately, modern kernels, including Plan 9, work fine with this hole. The days of
-having to load at the 1 MiB boundary are long gone.
+having to load at the 1 MiB boundary are long gone\(dg.
 .FS
-To have 9front boot at 16 MiB requires a 3-line change to the kernel mkfile:
+\(dgTo have 9front boot at 16 MiB requires a 3-line change to the kernel mkfile:
 .P1
 -KTZERO=0xffffffff81110000
 -APBOOTSTRAP=0xffffffff81007000
@@ -799,11 +808,11 @@ void directcall(void *arg)
 	extern uvlong vmcall(uvlong,uvlong,uvlong,uvlong,uvlong);
 	int fd;
 	USED(arg);
-	vmcall((uvlong)print, (uvlong)"direct call\n", 0, 0, 0);
+	vmcall((uvlong)print, (uvlong)"direct call", 0, 0, 0);
 	fd = (int) vmcall((uvlong)open, 
 				(uvlong)"/net/icmp/clone", 
-				(uvlong)ORDWR,(uvlong) 0, 0);
-	vmcall((uvlong)print, (uvlong)"fd is %d\n", fd, 0, 0);
+				(uvlong)ORDWR, 0, 0);
+	vmcall((uvlong)print, (uvlong)"fd is %d", fd, 0, 0);
 	while(1);
 }
 .P2
@@ -899,13 +908,13 @@ void *kernelmalloc(int sz) {
 }
 
 void free(void *f) {
-	vmcall(f);
+	vmcall(free, f);
 }
 .P2
 Once the guest kernel is using the host (VMM) allocator, we can, 
 further, use the acid storage leak detector to look for kernel misbehavior.
 The VMM could also look for memory corruption in the arena and notify
-the user whe it occurs.
+the user when it occurs.
 This could be a useful technique for debugging very difficult memory corruption.
 .LP
 When starting a VM becomes equivalent to starting a thread, many possibilities
