@@ -40,7 +40,7 @@ arrow "trap/syscall" "RETQ" <-> from P.s to K.n
 V: box "VM" with .w at P.e + (3i,0)
 L: box "Kernel" with .n at V.s + (0,-2i)
 arrow "vmexit" "vmresume" <-> from V.s to L.n
-box wid 2i ht 2i "Memory" "Registers" "VMCS" "Guest page table" with .nw at V.se +(.2i,-.1i)
+box wid 2i ht 2i "Memory" "Registers" "VMCS" "External page table" with .nw at V.se +(.2i,-.1i)
 .PE
 .IT
 Processes have state, VMs have state
@@ -99,7 +99,7 @@ arrow "physical" "" from X.e to M.w
 .IT
 There are page tables in the VM, and outside the vm
 .IT
-"For any virtual memory access, the original virtual address is converted in the first stage by VS-level address translation, as controlled by the vsatpregister, into a guest physical address. The guest physical address is then converted in the second stage by guest physical address translation, as controlled by the hgatpregister, into a supervisor physical address. "
+"For any virtual memory access, the original virtual address is converted ..., into a guest physical address. The guest physical address is then converted in the second stage by guest physical address translation, ... into a physical address. "
 .IT
 Sounds simple!
 .SS "Not as simple as docs imply
@@ -162,137 +162,41 @@ Page tables in the VM use physical addresses
 So 4K page table pages in a VM result in a lot more memory traffic than you'd think
 .IT
 Pro tip: always use at least 1G pages in the guest!
-.SS "The Linux model
+.SS "In Akaros, processes and VMs are a single abstraction
 .IT
-Virtual machine is a distinct device
+Get the abstraction right and all else follows
 .IT
-Communicates with host via IO/memory operations
+Akaros Kernel Code: about 5KLOC
 .IT
-Every distinct device type requires another emulator (which is why QEMU STILL has NE2000 support)
+Hard to tell any more, as it is integrated so completely into the process
+model
 .IT
-Which must be intercepted and interpreted
+But our vmx directory is 2KLOC so I multiplied by 2.5; almost certainly too
+high
 .IT
-Or, must implement IOSRV / IOMMU, which gets very complex
-.PS
-V: box wid 3i "KVM/Beehive device"
-P: box wid 2i "Process" with .e at V.w+(-1,0)
-K: box wid 1i "Kernel" with .n at P.s+(0,-2)
-N: box wid 1i "network"
-U: box wid 1i "uart"
-D: box wid 1i "disk"
-G: box wid 1i "graphics"
-B: box wid 1i "USB"
-arrow "ioctl" from P.s to K.n
-arrow "bit twiddling" from K.n to V.s
-arrow from N.n to V.s
-arrow from U.n to V.s
-arrow from D.n to V.s
-arrow from G.n to V.s
-arrow from B.n to V.s
-.PE
-.SS "Linux/BSD Virtual Machine model
+User libraries: about 12 KLOC
 .IT
-First, what's a VM?
+Includes user mode scheduler for VM threads
 .IT
-Is it an instance of opening a device in /dev?
+VMM: 690 LOC (not K!)
 .IT
-No: that's one way of implementing VMs
+This is sufficient to boot full Google production stack, schedule jobs, use 
+local disk
 .IT
-How do VMs fit into the Akaros model?
+Boot to single user in well under one second
 .IT
-We decided to take nothing for granted
+So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
-A look back is useful
+Comparable VMMs are far larger (100 to 1000 times)
 .IT
-A VM could be kind of a process
+What's the difference between a VM and Ring 3?
 .IT
-How did we used to start processes?
-.SS "Start a job: IBM
+nothing more than RETQ vs VMRESUME
 .IT
-//CONCATEX JOB CLASS=6,NOTIFY=&SYSUID
+as long as you have the state set up, you can return to either one
 .IT
-//* Example 1:
-.IT
-//STEP10 EXEC PGM=MYPROG
-.IT
-//IN1    DD DSN=SAMPLE.INPUT1,DISP=SHR
-.IT
-//OUT1   DD DSN=SAMPLE.OUTPUT1,DISP=(,CATLG,DELETE),
-.IT
-//       LRECL=50,RECFM=FB
-.IT
-//SYSIN  DD *
-.IT
-//CUST1  1000
-.IT
-//CUST2  1001
-.SS "On newer mainframes
-.IT
- <devices>
-.IT
-    <redirdev bus='usb' type='tcp'>
-.IT
-      <source mode='connect' host='localhost' service='4000'/>
-.IT
-      <boot order='1'/>
-.IT
-    </redirdev>
-.IT
-    <redirfilter>
-.IT
-      <usbdev class='0x08' vendor='0x1234' product='0xbeef' version='2.56'allow='yes'/>
-.IT
-      <usbdev allow='no'/>
-.IT
-    </redirfilter>
-.IT
-  </devices>
-.SS "On Unix, in 1972
-.IT
-fork();
-.IT
-Starting a process was ugly before this
-.IT
-Unix made it easy and clean
-.IT
-It was also controversial because it encouraged people to use it
-.IT
-I.e. that one could, in DMR's words, be “profligate” with processes
-.IT
-Forking a process to list files was considered ridiculous in many places
-.SS "Virtualization today
-.IT
-Remember that “newer mainframes” slide?
-.IT
-That's from libvirt on Linux
-.IT
-It's a tiny fraction of the total giant pile of XML for one VM
-.IT
-Far more complex than the 1970s mainframe JCL example!
-.IT
-To start a virtual machine on linux requires
-.IT
-Daemons
-.IT
-Special user ids
-.IT
-Batch scheduling
-.IT
-Gigantic XML files
-.IT
-Mountains of code
-.IT
-We've recreated batch systems from mainframes for VMs!
-.SS "Virtualization model
-.IT
-For Akaros, we did not want anything like Linux/BSD approach
-.IT
-We ported five different VMs to Akaros while evaluating them
-.IT
-Gvisor, KVM, Dune, Bhyve, two others you never heard of
-.IT
-Then, one day, during a discussion, I noticed something
-.SS "How VM page tables are done
+Even better, you can jump back and forth!
+.SS "Page tables in this model: far simpler
 .PS
 PL: box ht 1i wid 2i "Page" "table" "lock"
 P4: box "pml4" with .w at last box.e
@@ -304,7 +208,7 @@ arrow from P4.e to P3.w
 arrow from P3.e to P2.w
 arrow from P2.e to P1.w
 arrow from P1.e to P0.w
-Vl: box ht 1i wid 2i "Virtual" "page table" "lock" with .n at PL.s + (0,-1)
+Vl: box ht 1i wid 2i "External" "page table" "lock" with .n at PL.s + (0,-1)
 V4: box "eptl4" with .w at last box.e
 V3:box "eptl3" at last box+(1,0)
 V2:box "eptl2" at last box+(1,0)
@@ -351,41 +255,6 @@ On guest fault, walk double pages and fix faults in guest from host
 page table root is loaded from "doublepage+0"
 .IT
 guest page table root is loaded from "doublepage+4096"
-.SS "And from there
-.IT
-If the page tables are shared that way, what's the difference between a VM and Ring 3?
-.IT
-nothing more than RETQ vs VMRESUME
-.IT
-as long as you have the state set up, you can return to either one
-.IT
-Even better, you can jump back and forth!
-.SS "In Akaros, processes and VMs are a single abstraction
-.IT
-Get the abstraction right and all else follows
-.IT
-Akaros Kernel Code: about 5KLOC
-.IT
-Hard to tell any more, as it is integrated so completely into the process
-model
-.IT
-But our vmx directory is 2KLOC so I multiplied by 2.5; almost certainly too
-high
-.IT
-User libraries: about 12 KLOC
-.IT
-Includes user mode scheduler for VM threads
-.IT
-VMM: 690 LOC (not K!)
-.IT
-This is sufficient to boot full Google production stack, schedule jobs, use 
-local disk
-.IT
-Boot to single user in well under one second
-.IT
-So fast we sometimes think it failed and returned to an Akaros shell prompt
-.IT
-Comparable VMMs are far larger (100 to 1000 times)
 .SS "VMs as threads
 .IT
 VM Manager
@@ -879,6 +748,53 @@ vmcallreadfd(ulong fd, void *a, long n, vlong off)
 I picked this function because it shows that vmcalls are async (see sched())
 .IT
 The guest can keep going even as the host works on the read
-.IT
+.SS "The config file is simple
+.P1
+dev
+	root
+	cons
+	swap
+	arch
+	env
+	pipe
+	proc
+	mnt
+	srv
+	shr
+	dup
+	rtc
+	tls
+	cap
+	kprof
+	fs
+	uart
+	
+	segment
+	vmcall
+	vmx
+	dtracy
 
+misc
+	pci		pcipc
+	archgeneric	devkbd
+	archacpi	mp apic squidboy ec hpet
+	archmp		mp apic squidboy
+	mtrr
 
+#	uartvm
+	uarti8250
+
+	dtracysys
+	dtracytimer
+	dtracydev
+
+port
+	int cpuserver = 0;
+
+bootdir
+	boot
+	/$objtype/bin/paqfs
+	/$objtype/bin/auth/factotum
+	$CONF.bootfs.paq	bootfs.paq
+.P2
+.SS "Demo time"
