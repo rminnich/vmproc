@@ -1,7 +1,5 @@
 #!/bin/rc
 
-flag x +
-
 # mount points
 mntgen -s slashn /n && chmod 666 /srv/slashn
 mntgen -s slashmnt /mnt && chmod 666 /srv/slashmnt
@@ -91,16 +89,12 @@ fn main{
 		mn=`{echo $bootargs | sed 's,!, ,'}
 		ma=$mn(2-)
 		mn=$mn(1)
-		echo mn is $"mn
-		echo mt is $"mt
-		echo m..mn is m$"mn
 		switch(m$"mn){
 		case $mt
 			mp=m$mn
 			mp=$$mp
 		}
 	}
-	echo "MN IS $mn"
 	# authentication agent
 	if(! test -f /srv/factotum){
 		# we remount ip inteface after hostowner is set
