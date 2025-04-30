@@ -131,7 +131,6 @@ fn main{
 
 	if (~ $mn bind) echo BINDING
 	if not {
-	echo NOT BINDING
 	# insert cfs in the pipeline
 	if(test -x /bin/cfs){
 		if(~ $#bootdisk 1 && ~ $#cfs 0)
@@ -164,14 +163,9 @@ fn main{
 
 	if (~ $mn bind) {
 		echo BINDING just run an rc
-		#echo ns
-		#/$cputype/bin/ns
-		#echo what
-		#/$cputype/bin/ls -l /$cputype/bin
 		/$cputype/bin/rc
 	}
 	if not {
-	echo NOT BINDING
 	# remove enviroment variables
 	rm -f /env/^$mt /env/? /env/?? '/env/fn#'* 
 
