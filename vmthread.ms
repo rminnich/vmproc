@@ -10,7 +10,7 @@ Ron Minnich
 rminnich@gmail.com
 .rm CH
 .nr % 0
-.dePF
+.de PF
 ..
 .AB
 We describe a new Virtual Machine model, VMThreads, for Plan 9, which allows Virtual Machines to be integrated into a 
