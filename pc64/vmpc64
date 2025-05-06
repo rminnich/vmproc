@@ -1,4 +1,7 @@
 # pc64 - amd64 pc terminal with local disk
+# can not remove swap
+# can not remove rtc: nvramwrite
+# you can remove tls but it seems a bad idea?
 dev
 	root
 	cons
