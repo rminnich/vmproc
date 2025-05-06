@@ -5,12 +5,9 @@ mntgen -s slashn /n && chmod 666 /srv/slashn
 mntgen -s slashmnt /mnt && chmod 666 /srv/slashmnt
 mntgen -s mntexport /mnt/exportfs && chmod 666 /srv/mntexport
 
-bind /root /mnt/broot
-unmount /root
-
 # bind in devices
 #for(i in ¤ ¶ P S f æ t b m)
-for(i in ¤ ¶ P S f æ t b m)
+for(i in æ t b m) # need t or no console b & m or acme fails first time ... weird
 	bind -qa '#'^$i /dev
 
 v=/mnt/vmproc
