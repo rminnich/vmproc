@@ -12,7 +12,8 @@ unmount /root
 for(i in ¤ ¶ P S f æ t b m)
 	bind -qa '#'^$i /dev
 
-bind '#Z'/ /mnt/vmproc
+v=/mnt/vmproc
+bind '#Z'/ $v
 
 ls -l /mnt/vmproc
 ns
@@ -72,29 +73,30 @@ mt=()
 fn main{
 	mp=()
 	mn=""
-	while(~ $#mp 0){
-		if(! ~ $#bootloop 0){
-			nobootprompt=$bootloop
-			# 'flatten' for the next boot
-			echo -n $bootloop > '#ec/bootloop'
-		}
-		if(~ $#nobootprompt 0){
-			echo
-			showlocaldevs
-			ask bootargs ' is (tcp, tls, il, local!device)' $"bootargs
-			echo bootargs $"bootargs
-		}
-		if not bootargs=$nobootprompt
-		nobootprompt=()
-		mn=`{echo $bootargs | sed 's,!, ,'}
-		ma=$mn(2-)
-		mn=$mn(1)
-		switch(m$"mn){
-		case $mt
-			mp=m$mn
-			mp=$$mp
-		}
-	}
+#	while(~ $#mp 0){
+#		if(! ~ $#bootloop 0){
+#			nobootprompt=$bootloop
+#			# 'flatten' for the next boot
+#			echo -n $bootloop > '#ec/bootloop'
+#		}
+#		if(~ $#nobootprompt 0){
+#			echo
+#			showlocaldevs
+#			ask bootargs ' is (tcp, tls, il, local!device)' $"bootargs
+#			echo bootargs $"bootargs
+#		}
+#		if not bootargs=$nobootprompt
+#		nobootprompt=()
+#		mn=`{echo $bootargs | sed 's,!, ,'}
+#		ma=$mn(2-)
+#		mn=$mn(1)
+#		switch(m$"mn){
+#		case $mt
+#			mp=m$mn
+#			mp=$$mp
+#		}
+#	}
+
 	# authentication agent
 	if(! test -f /srv/factotum){
 		# we remount ip inteface after hostowner is set
@@ -112,8 +114,27 @@ fn main{
 		bind -qa '#I' /net
 	}
 
+	echo TRY THIS RC ps works
+	bind /$v/$cputype /$cputype
+	/$cputype/bin/bind /$cputype/bin /bin
+	for(i in acme adm dist lib net rc sys usr dev)
+		bind /$v/$i /$i
+	bind -a /rc/bin /bin
+	/bin/rc
+	echo DONE THAT RC
+	exit 1
+
 	# config method
 	$mp(1) $ma
+
+	echo KNOWN GOOD RC START
+	bind /$v/$cputype /$cputype
+	/$cputype/bin/bind /$cputype/bin /bin
+	for(i in acme adm dist lib net rc sys usr dev)
+		bind /$v/$i /$i
+	bind -a /rc/bin /bin
+	/bin/rc
+	echo DONE THAT RC
 
 	# load keys from secstore if $auth or $secstore is not empty
 	x=secstore
@@ -125,6 +146,7 @@ fn main{
 		if(~ $status *readnvram* || ! ~ $service cpu)
 			$x >/mnt/factotum/ctl
 	}
+
 
 	# connect method
 	$mp(2) $ma
