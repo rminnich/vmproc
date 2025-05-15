@@ -40,7 +40,7 @@ a level of debugging that might otherwise require hardware support.
 Because the VM is visible to the kernel as a process, standard process management
 tools can be used to study its behavior. 
 Further, it is possible to implement a driver-less kernel, i.e. one which uses system
-calls, not low-level IO operations, and monitor the VMs use
+calls, not low-level IO operations, and monitor the VM's use
 of network, disk, and other resources 
 directly, rather than trying to reconstruct its activity from its use of emulated
 devices. We discuss the implementation of this model in #Z, a device which maps 
