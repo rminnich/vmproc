@@ -390,7 +390,7 @@ VTH_VMCALL_PRINTC and VTH_VMCALL_EXIT; VTH_VMCALL_TEST1 is a custom
 vmcall implemented in this same program.
 .LP
 Below we show a VMM that runs this function. 
-This examples runs 5 VMs simultaneously, i.e. on 5 cores.
+This example runs 5 VMs simultaneously, i.e. on 5 cores.
 This is a multi-threaded program running several VMs on several cores at once. 
 It is the
 technique we use to start a multiprocessor kernel such as Linux: 
