@@ -24,7 +24,7 @@ VMThreads requires no kernel changes.
 Traditional virtualization systems are designed to run heavyweight guest OS images, usually a 
 Linux or Windows distribution, including a disk image.
 Their disk activity is visible only as a set of IO operations on a virtual disk, not 
-operations in a file system.
+operations on a file system.
 Guest VMs are frequently accessed over an emulated network connection, as though they
 were an entirely independent system.
 .LP
