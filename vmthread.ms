@@ -47,7 +47,7 @@ devices. We discuss the implementation of this model via the #Z device, which ma
 driver IO functions to system calls, communicated from guest to host via vmcall
 instructions. We have added this device support to the 9front vmx command.
 .LP
-While the VMs as threads model is very simple, it is as capable as more complex systems:
+While the VMs-as-threads model is very simple, it is as capable as more complex systems:
 we first implemented VMThreads in the Akaros research kernel, and
 showed that it could support the Google production kernel stack as a guest. 
 .LP
