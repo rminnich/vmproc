@@ -43,7 +43,7 @@ Further, it is possible to implement a driver-less kernel, i.e. one which uses s
 calls, not low-level IO operations, and monitor the VM's use
 of network, disk, and other resources 
 directly, rather than trying to reconstruct its activity from its use of emulated
-devices. We discuss the implementation of this model in #Z, a device which maps 
+devices. We discuss the implementation of this model via the #Z device, which maps
 driver IO functions to system calls, communicated from guest to host via vmcall
 instructions. We have added this device support to the 9front vmx command.
 .LP
