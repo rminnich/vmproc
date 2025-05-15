@@ -24,7 +24,7 @@ VMThreads requires no kernel changes.
 Traditional virtualization systems are designed to run heavyweight guest OS images, usually a 
 Linux or Windows distribution, including a disk image.
 Their disk activity is visible only as a set of IO operations on a virtual disk, not 
-operations in a file system.
+operations on a file system.
 Guest VMs are frequently accessed over an emulated network connection, as though they
 were an entirely independent system.
 .LP
@@ -40,14 +40,14 @@ a level of debugging that might otherwise require hardware support.
 Because the VM is visible to the kernel as a process, standard process management
 tools can be used to study its behavior. 
 Further, it is possible to implement a driver-less kernel, i.e. one which uses system
-calls, not low-level IO operations, and monitor the VMs use
+calls, not low-level IO operations, and monitor the VM's use
 of network, disk, and other resources 
 directly, rather than trying to reconstruct its activity from its use of emulated
-devices. We discuss the implementation of this model in #Z, a device which maps 
+devices. We discuss the implementation of this model via the #Z device, which maps
 driver IO functions to system calls, communicated from guest to host via vmcall
 instructions. We have added this device support to the 9front vmx command.
 .LP
-While the VMs as threads model is very simple, it is as capable as more complex systems:
+While the VMs-as-threads model is very simple, it is as capable as more complex systems:
 we first implemented VMThreads in the Akaros research kernel, and
 showed that it could support the Google production kernel stack as a guest. 
 .LP
@@ -59,10 +59,10 @@ it requires no kernel changes.
 Introduction
 .LP
 Virtualization is a hardware capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
-VMs do not stand alone; they require a Virtual Machine Manager, or VMM, to start them, 
+VMs do not stand alone; they require a Virtual Machine Monitor (VMM), also known as a hypervisor, to start them,
 provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
-is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
+is ubiquitous on commodity client and server systems, running on everything from phones to cloud servers.
 Chip vendors have made significant changes over the last 20 years to make virtualization efficient.
 A guest VM, as measured on cloud servers, can achieve about 91% of the throughput of running on host; 
 in some cases, it can even run faster.
@@ -79,7 +79,7 @@ This interface is difficult enough that,
 17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
 The API is also broad:
 virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
-Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
+Virtual Machine software stacks can be very large, with a memory footprint of 10 MiB to 500 MiB.
 .LP
 In this paper we introduce 
 .I VMThreads,
@@ -93,7 +93,7 @@ vmthreadcreate((void *)brdot, nil, 1024);
 .P2
 The API is identical to the threadcreate API from libthread.
 .LP
-The rest of this paper is organized as follows: we provide an overview of virtualization; discuss
+The rest of this paper is organized as follows: we provide an overview of virtualization; describe
 the Akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
 and show examples of its use.
@@ -103,44 +103,44 @@ to the host via the vmcall instruction.
 .SH
 Virtualization
 .LP
-Virtualization allows privileged software to run in an unprivileged context, a.k.a., a guest, under control of a host. 
-Virtualization provides services required by applications, 
-that might not be provided by the host (.e.g Linux running as a guest on OSX); 
-and a security boundary for the the host, protecting it from the guest. 
-Virtualization has been available since the 1960s on IBM mainframes. 
+Virtualization allows privileged software to run in an unprivileged context, under control of a host.
+The software running in the unprivileged context is also called a guest.
+Virtualization provides services required by applications,
+that might not be provided by the host,
+and a security boundary for the the host, protecting it from the guest, e.g. Linux running in a VM on macOS.
+Virtualization has been available since the 1960s on IBM mainframes.
 .LP
 Until the release of VMWare several decades ago, virtualization
 had been almost ignored in non-mainframe operations. 
-Since then, however virtualization has become very widely used, and even taken for granted, on a wide range of systems, 
+Since then, however, virtualization has become very widely used, and even taken for granted, on a wide range of systems, 
 including inexpensive laptops such as Chromebooks, up to and including the largest cloud servers. 
 .LP
-Once virtualization became more popular, users  wished for
+Once virtualization became more popular, users wished for
 an alternative to proprietary virtualization 
 software. 
 Xen was an early open source virtualization system for commodity x86 systems, 
 and was widely deployed on Amazon Web Services. 
 .LP
-Xen is a kernel which runs other kernels as a VM guest, i.e. "Domains", with one kernel ("Domain 0")
+The Xen hypervisor runs kernels as VM guests, calling them "Domains", with one guest kernel in "dom0"
 being given special privileges to perform IO, since Xen has no drivers
-of its own. 
-Xen is always the host, and kernels are always the guest. In Xen, every kernel runs
-at a lower privilege level than the Xen kernel. 
+of its own.
+Xen is always the host, and other kernels are always the guest. In Xen, every guest kernel runs
+at a lower privilege level than the Xen hypervisor.
 .LP
-Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used\(dg. 
+Following close on the heels of Xen came other systems. Linux KVM (Kernel Virtual Machine) is probably the most widely used\(dg. 
 .FS
-\(dgThere are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
+\(dgThere are multiple VMM implementations available for Linux, while there are fewer for the BSDs and macOS, and there is only one for Plan 9.
 .FE
-Unlike Xen, 
-KVM  VMs run as a driver in Linux.
+Unlike Xen, VMMs on Linux run under a driver.
 In this model, a single general purpose host kernel is more 
 privileged than the virtual machine software, which in turn is more privileged than any VM guest. 
 The driver manages architectural features that enable and control virtualization. 
 .LP
 Xen and KVM are structurally very different systems. 
-The arguments over classifying these types of VMs may never end, but, commonly, Xen is called a Type 1 hypervisor, as it is in itself a kernel
-above all other kernels; and KVM,the BSD VMs, the OSX and Plan 9 VMs;  are called a Type 2, as they are contained
-in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type 2 kernels. When we use the term VM, we are 
-discussing a Type 2 VM.
+The arguments over classifying types of VMMs may never end, but, commonly, Xen is called a Type-1 hypervisor, as it is in itself a kernel
+above all other kernels, whereas KVM, the BSD VMMs, the OSX and Plan 9 VMMs are called Type-2 hypervisors, as they are contained
+in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type-2 hypervisors. When we use the term VM, we are 
+referring to a guest under a Type-2 hypervisor.
 .SH
 Virtual Machine Memory addressing
 .LP
@@ -390,7 +390,7 @@ VTH_VMCALL_PRINTC and VTH_VMCALL_EXIT; VTH_VMCALL_TEST1 is a custom
 vmcall implemented in this same program.
 .LP
 Below we show a VMM that runs this function. 
-This examples runs 5 VMs simultaneously, i.e. on 5 cores.
+This example runs 5 VMs simultaneously, i.e. on 5 cores.
 This is a multi-threaded program running several VMs on several cores at once. 
 It is the
 technique we use to start a multiprocessor kernel such as Linux: 
@@ -474,7 +474,8 @@ external process model here, as it has no bearing on VMThreads.
 As mentioned above, in libthread,
 a single thread in the same process is created by 
 .CW threadcreate.
-We follow this naming convention: VMThreads are created with vmthreadcreate.
+We follow this naming convention: VMThreads are created with
+.I vmthreadcreate.
 .LP
 Threads communicate via channels. A channel is an in-memory pipe which transmits
 basic scalar types such as bytes, ints, and pointers. When a thread sends on a 
