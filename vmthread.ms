@@ -79,7 +79,7 @@ This interface is difficult enough that,
 17 years after virtualization came to Linux, there are only a handful of commonly used VMMs.
 The API is also broad:
 virtualization software for, e.g., Linux, is considered compact if it only requires a few thousands of lines of code to run. 
-Virtual Machine Managers (VMMs) can be very large, with a memory footprint of 10 MiB to 500 MiB. 
+Virtual Machine software stacks can be very large, with a memory footprint of 10 MiB to 500 MiB.
 .LP
 In this paper we introduce 
 .I VMThreads,
@@ -103,44 +103,44 @@ to the host via the vmcall instruction.
 .SH
 Virtualization
 .LP
-Virtualization allows privileged software to run in an unprivileged context, a.k.a., a guest, under control of a host. 
-Virtualization provides services required by applications, 
-that might not be provided by the host (.e.g Linux running as a guest on OSX); 
-and a security boundary for the the host, protecting it from the guest. 
-Virtualization has been available since the 1960s on IBM mainframes. 
+Virtualization allows privileged software to run in an unprivileged context, under control of a host.
+The software running in the unprivileged context is also called a guest.
+Virtualization provides services required by applications,
+that might not be provided by the host,
+and a security boundary for the the host, protecting it from the guest, e.g. Linux running in a VM on macOS.
+Virtualization has been available since the 1960s on IBM mainframes.
 .LP
 Until the release of VMWare several decades ago, virtualization
 had been almost ignored in non-mainframe operations. 
-Since then, however virtualization has become very widely used, and even taken for granted, on a wide range of systems, 
+Since then, however, virtualization has become very widely used, and even taken for granted, on a wide range of systems, 
 including inexpensive laptops such as Chromebooks, up to and including the largest cloud servers. 
 .LP
-Once virtualization became more popular, users  wished for
+Once virtualization became more popular, users wished for
 an alternative to proprietary virtualization 
 software. 
 Xen was an early open source virtualization system for commodity x86 systems, 
 and was widely deployed on Amazon Web Services. 
 .LP
-Xen is a kernel which runs other kernels as a VM guest, i.e. "Domains", with one kernel ("Domain 0")
+The Xen hypervisor runs kernels as VM guests, calling them "Domains", with one guest kernel in "dom0"
 being given special privileges to perform IO, since Xen has no drivers
-of its own. 
-Xen is always the host, and kernels are always the guest. In Xen, every kernel runs
-at a lower privilege level than the Xen kernel. 
+of its own.
+Xen is always the host, and other kernels are always the guest. In Xen, every guest kernel runs
+at a lower privilege level than the Xen hypervisor.
 .LP
-Following close on the heels of Xen came other systems; Linux KVM (Kernel Virtual Machine) is probably the most widely used\(dg. 
+Following close on the heels of Xen came other systems. Linux KVM (Kernel Virtual Machine) is probably the most widely used\(dg. 
 .FS
-\(dgThere are at last count eight different VMs available on Linux; one for the BSD kernels; one for Darwin; and one for Plan 9.
+\(dgThere are multiple VMM implementations available for Linux, while there are fewer for the BSDs and macOS, and there is only one for Plan 9.
 .FE
-Unlike Xen, 
-KVM  VMs run as a driver in Linux.
+Unlike Xen, VMMs on Linux run under a driver.
 In this model, a single general purpose host kernel is more 
 privileged than the virtual machine software, which in turn is more privileged than any VM guest. 
 The driver manages architectural features that enable and control virtualization. 
 .LP
 Xen and KVM are structurally very different systems. 
-The arguments over classifying these types of VMs may never end, but, commonly, Xen is called a Type 1 hypervisor, as it is in itself a kernel
-above all other kernels; and KVM,the BSD VMs, the OSX and Plan 9 VMs;  are called a Type 2, as they are contained
-in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type 2 kernels. When we use the term VM, we are 
-discussing a Type 2 VM.
+The arguments over classifying types of VMMs may never end, but, commonly, Xen is called a Type-1 hypervisor, as it is in itself a kernel
+above all other kernels, whereas KVM, the BSD VMMs, the OSX and Plan 9 VMMs are called Type-2 hypervisors, as they are contained
+in a general purpose kernel. For the rest of this paper, we restrict the discussion to Type-2 hypervisors. When we use the term VM, we are 
+referring to a guest under a Type-2 hypervisor.
 .SH
 Virtual Machine Memory addressing
 .LP
