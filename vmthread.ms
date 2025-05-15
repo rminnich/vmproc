@@ -93,7 +93,7 @@ vmthreadcreate((void *)brdot, nil, 1024);
 .P2
 The API is identical to the threadcreate API from libthread.
 .LP
-The rest of this paper is organized as follows: we provide an overview of virtualization; discuss
+The rest of this paper is organized as follows: we provide an overview of virtualization; describe
 the Akaros vmthread virtualization model which inspired this work; discuss the implementation of this model in Plan 9
 .I libthread,
 and show examples of its use.
