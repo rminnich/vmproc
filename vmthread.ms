@@ -62,7 +62,7 @@ Virtualization is a hardware capability that allows privileged code to run in a 
 VMs do not stand alone; they require a Virtual Machine Monitor (VMM), also known as a hypervisor, to start them,
 provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
-is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
+is ubiquitous on commodity client and server systems, running on everything from phones to cloud servers.
 Chip vendors have made significant changes over the last 20 years to make virtualization efficient.
 A guest VM, as measured on cloud servers, can achieve about 91% of the throughput of running on host; 
 in some cases, it can even run faster.
