@@ -474,7 +474,8 @@ external process model here, as it has no bearing on VMThreads.
 As mentioned above, in libthread,
 a single thread in the same process is created by 
 .CW threadcreate.
-We follow this naming convention: VMThreads are created with vmthreadcreate.
+We follow this naming convention: VMThreads are created with
+.I vmthreadcreate.
 .LP
 Threads communicate via channels. A channel is an in-memory pipe which transmits
 basic scalar types such as bytes, ints, and pointers. When a thread sends on a 
