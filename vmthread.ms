@@ -59,7 +59,7 @@ it requires no kernel changes.
 Introduction
 .LP
 Virtualization is a hardware capability that allows privileged code to run in a less-privileged context, i.e. a virtual machine (VM).
-VMs do not stand alone; they require a Virtual Machine Manager, or VMM, to start them, 
+VMs do not stand alone; they require a Virtual Machine Monitor (VMM), also known as a hypervisor, to start them,
 provide services such as IO to them and, as needed, shut them down.
 Virtualization, once limited to the exotic domain of IBM mainframes,  
 is ubiquotous on commodity client and server systems, running on everything from phones to cloud servers.
