@@ -287,10 +287,10 @@ arrow "physical" "" "address" from last box.e to M.s +(0,-.55) then to M.s
 .PE
 
 .SH
-Virtual Machine managers
+Virtual Machine monitors
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
-Virtual Machine Manager (VMM).
+Virtual Machine Monitor (VMM).
 The VMM is a program that directs the kernel to
 load, run, and manage a guest. As the guest VM runs, 
 it will exit with error codes, interrupts,
