@@ -287,10 +287,10 @@ arrow "physical" "" "address" from last box.e to M.s +(0,-.55) then to M.s
 .PE
 
 .SH
-Virtual Machine managers
+Virtual Machine monitors
 .LP
 Running a VM guest requires two software components: the VM code in the kernel; and a so-called
-Virtual Machine Manager (VMM).
+Virtual Machine Monitor (VMM).
 The VMM is a program that directs the kernel to
 load, run, and manage a guest. As the guest VM runs, 
 it will exit with error codes, interrupts,
@@ -303,12 +303,12 @@ end; or the VM can be resumed. During the lifetime of a typical VM, millions
 of VM exits are processed and millions of VM resumes are issued by the VMM.
 .LP
 VMMs can be very complex, and, consequently, can be very large. 
-We know of one proprietary VMM which is a 500 MiB binary; 
-at the same time, a basic Linux VMM, written in C, can be as small as a megabyte. 
+We know of one proprietary VMM which is a 500 MiB binary.
+At the same time, a basic Linux VMM, written in C, can be as small as a megabyte. 
 Typically, smaller 
-VMMs can not handle widely varying demands of guests; the larger VMMs have support for more complicated operations, e.g., 
+VMMs can not handle widely varying demands of guests. The larger VMMs have support for more complicated operations, such as 
 BIOS interrupts needed for DOS.
-A common open source VMM is qemu, but there are a few others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
+A common open source VMM is QEMU, but there are a few others, e.g. the KVMTool, CrosVM, Cloud Hypervisor, and GoKVM tools for Linux. 
 .LP
 With few exeptions, the VM API is built around a device model, frequently
 requiring special privilege to access. 
@@ -325,11 +325,11 @@ April 1, 2015 and on (yes, April Fool's day!).
 .LP
 As part of our Akaros research at Google, we developed an entirely
 new VM model, by adding a new program protection level called Ring V.
-Ring V is almost identical to the X86 Ring 3, a.k.a user mode, save that it is a VM.
+Ring V is almost identical to the x86 Ring 3, a.k.a. user mode, save that it is a VM.
 When the Akaros kernel exits Ring 0 (kernel) to the program, it
 checks a flag in
 the process structure and either does
-a traditional exit to Ring 3, using the saved trap context and RETI (return from interrupt) instruction;
+a traditional exit to Ring 3, using the saved trap context and RETI (return from interrupt) instruction,
 or to Ring V, using the VM Control Structure (VMCS) context and a VMRESUME instruction.  
 Akaros can decide, each time it resumes a process, whether to resume it in Ring 3 or Ring V. 
 Processes can flip back and forth between the two modes at will. 
@@ -364,7 +364,7 @@ Shown below is a function that runs in the guest. It is called
 thread_entry, and is part of a single file containing both
 the VMM and the guest code. They can be compiled into one unit
 because the guest physical addresses and the host virtual addresses
-are the same; in fact, the guest physical memory is provided
+are the same. In fact, the guest physical memory is provided
 directly from the host virtual memory.
 This code also shows the use of 
 .I vmcall,
@@ -415,7 +415,7 @@ int main(int argc, char **argv)
 .P2
 To reiterate, all the code we are showing is in the same file: the VMM and the guest "kernel" are 
 compiled in one file, one time.
-in this case, it creates 5 threads with vthread_create, using 
+In this case, it creates 5 threads with vthread_create, using 
 thread_entry as the function to activate. 
 It then performs a vthread_join. Each of the threads, when it
 exits with VTH_VMCALL_EXIT, will complete the join.
@@ -429,7 +429,7 @@ strings, and then print them with the vmcall.
 .SH
 Moving this model to 9front
 .LP
-There are two aspects of Akaros virtualization model that require impactful, albeit small (2500 lines total), changes.
+There are two aspects of Akaros' virtualization model that require impactful, albeit small (2500 lines total), changes.
 .LP
 The first is the implementation of Ring V. Processes need to record which
 ring they are returning to; they need to store extra state for Ring V (about 8k); and
@@ -460,7 +460,7 @@ A quick review of Plan 9 libthread
 .LP
 Plan 9 threads are lightweight, non-preemptive coroutines, running in one or more
 processes which share memory.
-Lightweight threads can be created in the current process, via threadreate; or in an external process, 
+Lightweight threads can be created in the current process, via threadcreate; or in an external process,
 via procrfork. Whether in the same process or a process created by procrfork, all memory is shared, including
 stacks. The main purpose of procrfork is to allow calls to operations, such as file I/O, that can
 block the process and hence all the threads. 
