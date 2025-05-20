@@ -34,13 +34,13 @@ vmthreadcreate(brdot, nil, 1024);
 .SS "A quick review of VMs
 .PS
 P: box "Process"
-box wid 2i ht 1.3i "memory" "Registers" "Proc" with .nw at P.se +(.2i,-.1i)
+box wid 2i ht 1.3i "memory" "Registers" "Proc" "Page Table" with .nw at P.se +(.2i,-.1i)
 K: box "Kernel" with .n at P.s + (0,-2i)
 arrow "trap/syscall" "RETQ" <-> from P.s to K.n
 V: box "VM" with .w at P.e + (3i,0)
 L: box "Kernel" with .n at V.s + (0,-2i)
-arrow "vmexit" "vmresume" <-> from V.s to L.n
-box wid 2i ht 2i "Memory" "Registers" "VMCS" "External page table" with .nw at V.se +(.2i,-.1i)
+arrow "vmexit/vmcall" "vmresume" <-> from V.s to L.n
+box wid 2i ht 2i "Memory" "Registers" "Proc" "Page table" "VMCS" with .nw at V.se +(.2i,-.1i)
 .PE
 .IT
 Processes have state, VMs have state
@@ -188,17 +188,9 @@ Boot to single user in well under one second
 So fast we sometimes think it failed and returned to an Akaros shell prompt
 .IT
 Comparable VMMs are far larger (100 to 1000 times)
-.IT
-What's the difference between a VM and Ring 3?
-.IT
-nothing more than RETQ vs VMRESUME
-.IT
-as long as you have the state set up, you can return to either one
-.IT
-Even better, you can jump back and forth!
 .SS "Page tables in this model: far simpler
 .PS
-PL: box ht 1i wid 2i "Page" "table" "lock"
+PL: box ht 1i wid 2i "Process" "page table" "lock"
 P4: box "pml4" with .w at last box.e
 P3:box "pml3" at last box+(1,0)
 P2:box "pml2" at last box+(1,0)
@@ -208,7 +200,7 @@ arrow from P4.e to P3.w
 arrow from P3.e to P2.w
 arrow from P2.e to P1.w
 arrow from P1.e to P0.w
-Vl: box ht 1i wid 2i "External" "page table" "lock" with .n at PL.s + (0,-1)
+Vl: box ht 1i wid 2i "VM" "page table" "lock" with .n at PL.s + (0,-1)
 V4: box "eptl4" with .w at last box.e
 V3:box "eptl3" at last box+(1,0)
 V2:box "eptl2" at last box+(1,0)
@@ -298,7 +290,7 @@ static void vmcall(void *a)
 }
 .IT
 Before we go into how we get this working on Plan 9 vmx, we need to describe vmx a bit
-.SS "Digression: the Plan 9 vmx device in 5 lines
+.SS "Plan 9 VMX device
 .IT
 /sys/src/9/pc/devvmx.c 2260 lines (Linux is 30x more code)
 .IT
@@ -307,179 +299,19 @@ Open #X/clone
 Set up VM with reads/writes
 .IT
 Run event loop
-.IT
-Events are mainly vmexits as strings
-.IT
-e.g. io 0xcf80003 pc 0xffffffff8111025c sp 0xffffffff8001bec0 ...
-.IT
-	Type of instruction (IO) at 03f8, and other bits to know how to resume
-.IT
- .vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff817ce560 ilen 0x3
-.IT
-	The vmcall instruction, also showing ilen 3
-.IT
-Once an exit is handled, write go command to ctl
-.IT
-	go pc=0xffffffff81110d79;ax=0x43
-.IT
-Note that you can set any changed registers and set any return pc
-.IT
-Let's go deeper ...
-.SS "Setup
-.IT
-Set up file descriptors
-.IT
-Set up a run loop, which
-.IT
-	Sets up threadprocs and chans
-.IT
-	Runs a for loop processing guest exits
-.SS "Set up file descriptors
-.P1
-static void
-vmxsetup(void)
-{
-  static char buf[128], name[128];
-  int rc;
-  
-  ctlfd = open("#X/clone", ORDWR|ORCLOSE);
-  rc = read(ctlfd, name, sizeof(name) - 1);
-  name[rc] = 0;
-  if(segname == nil){
-    segname = smprint("vm.%s", name);
-    segrclose = ORCLOSE;
-  }
-  
-  snprint(buf, sizeof(buf), "#X/%s/regs", name);
-  regsfd = open(buf, ORDWR);
-  
-  snprint(buf, sizeof(buf), "#X/%s/map", name);
-  mapfd = open(buf, OWRITE|OTRUNC);
-  
-  snprint(buf, sizeof(buf), "#X/%s/wait", name);
-  waitfd = open(buf, OREAD);
-}
-.P2
-.IT
-Error handling elided
-
-.SS "convert FD to chan for thread loop
-.P1
-static void
-waitproc(void *)
-{
-	static char buf[512];
-	char *p;
-	int rc;
-
-	threadsetname("waitexit");
-	for(;;){
-		int i;
-		memset(buf, 0, sizeof(buf));
-		rc = read(waitfd, buf, sizeof(buf) - 1);
-		if(rc < 0)
-			sysfatal("read: %r");
-		p = strchr(buf, '\\n');
-		if(p != nil) *p = 0;
-		sendp(waitch, strdup(buf));
-	}
-}
-.P2
-.IT
-Messages are in the form msg-type pc val; sp val; ilen val; [other values]
-.IT
-Commonly processed in a runloop function
-.SS "starting it, a.k.a launch
-.P1
-void
-launch(void)
-{
-	char *s;
-	s = rcflush(1); // super cool
-	if(ctl("go %s", s == nil ? "" : s) < 0)
-		...
-	getexit++;
-}
-.P2
-
-.SS "runloop
-.P1
-runloop(void)
-{
-	char *waitmsg;
-	ulong ul;
-	int ret;
-
-	proccreate(waitproc, nil, 4096);
-	launch();
-	for(;;){
-		enum {
-			WAIT,
-		};
-		Alt a[] = {
-			[WAIT] {waitch, &waitmsg, CHANRCV},
-			...
-			{nil, nil, CHANEND}
-		};
-		switch(alt(a)){
-		case WAIT:
-			getexit--;
-			processexit(waitmsg);
-			break;
-		...
-		}
-		if(getexit == 0 && state == VMRUNNING)
-			launch();
-	}
-}
-.P2
-.SS "What wait messages look like
-.IT
-io 0x3f80000 pc 0xffffffff8111022c sp 0xffffffff8001bd18 ilen 0x...
-.IT
-	IO type, address, pc, len, anything else needed
-.IT
-\.vmcall 0x0 pc 0xffffffff81110d76 sp 0xffffffff80036698 ilen 0x3
-.IT
-	vmcall instruction
-.IT
-Exit handler parses the text, switches out to handlers, then resumes vm
-.IT
-go pc=0xffffffff8111022d;
-.IT
-why the semicolon? Because there can be more registers!
-.IT
-go pc=0x1110050;ax=0x2badb002;bx=0x147e000;
-.IT
-go pc=0xffffffff811101ec;ax=0x60
-.IT
-I have used a lot of VM interfaces; this is not necessarily the most efficient, but it is very easy to work with
-.SS "Exit handler
-.IT
-Handler tokenizes string, gets pc, sp, ax, ilen, etc. if present
-.IT
-Finds handler in table, calls associated function
-.IT
-If unhandled, posts exception
-.IT
-Otherwise, returns result in exceptioninfo (warning: function-local variable ...)
-.IT
-.P1
-static ExitType etypes[] = {
-	{"io", iohandler},
-	{".cpuid", cpuid},
-	{".hlt", hlt},
-	{"eptfault", eptfault},
-	{"*ack", irqackhand},
-	{".rdmsr", rdwrmsr},
-	{".wrmsr", rdwrmsr},
-	{".movdr", movdr},
-	{"#db", dbgexc},
-	{"movcr", movcr},
-	{".xsetbv", xsetbv},
-	{".vmcall", dovmcall},
-};
-.P2
+.PS
+V: circle "#X/clone" "ctl,status" "regs,fpregs" "map" "wait" radius 1i 
+M: circle "vmx" "thread" radius .5i at V +(-3,0)
+W: circle "wait" "proc" radius .5i at M +(1.5,-3)
+spline -> from W.w then left 1i then up 2i then to M.s ".vmcall ..."
+spline -> from V.e then right 2i then down 3i then to W.e ".vmcall 0x0 pc 0x3 sp 0x4 ilen 0x3"
+spline <-> from V.w to M.e "commands" "status"
+.PE
+.PS
+V: circle "#X/clone" "ctl,status" "regs,fpregs" "map" "wait" radius 1i 
+M: circle "vmx" "thread" radius .5i at V +(-4,0)
+spline <-> from V.w to M.e "go pc=0x6;ax=42" ""
+.PE
 .SS "Summary
 .IT
 devvmx is very much a Plan 9 approach
@@ -503,14 +335,14 @@ Pulled several files from vmx command into libthread
 .TS
 c	c
 l	l.
-Task	Files	Status
+Task	Files
 Implement double-pages	/sys/src/9/pc64/
 	main.c,mmu.c,mem.h
 Implement shared thread/VM
 guest address space
 add vmcall support
 to vmx command	/sys/src/cmd/vmx
-	ksetup.c,main.c
+	ksetup.c,main.c,exith.c
 Extend libthread to
 include vmthreads
 Not all needed	/sys/src/libthread/
@@ -549,7 +381,7 @@ Partly because guests can read/write address zero
 .IT
 Partly because it is a good idea to have "safe" memory for the VMM
 .IT
-Low Memory (typicall 16MiB) is copied, not shared; high memory is shared
+Low Memory (typically 16MiB) is copied, not shared; high memory is shared
 .IT
 Guest can call functions in the host using physical addresses
 .IT
@@ -558,7 +390,7 @@ E.g., a kernel could call the process malloc
 and acid could track leaks
 .PS
 P:box "process virtual" wid 1.6i
-box "0-2MiB" ht .3i wid 1.6i with .s at P.n + (0,.2i)
+box invis ht .3i wid 1.6i with .s at P.n + (0,.2i)
 box "2MiB-16MiB" ht .6i wid 1.6i with .s at last box.n
 
 Q: box "16MiB-80MiB" ht .4i wid 1.6i with .s at last box.n
@@ -578,54 +410,6 @@ line from Q.se to I.sw
 arrow from R.e to U.w
 spline -> from U.e right 3 then to H.e 
 .PE
-.SS "vmthreadinit(uvlong lowmemsize, uvlong highmemsize)
-.P1
-{
-	Region *r;
-	char sn[256], buf[256];
-	uvlong sz;
-	int fd;
-	...
-
-	cpuidinit();
-	// create chans
-	vmthreadmemsize = highmemsize;
-	/* Starting point of segment is lowmemsize.
-	 * This ensures the guest "unshared area" can be a copy
-	 * of process memory. */
-	... create segment
-		 lowmemsize + highmemsize
-		 based at lowmemsize
-	r = mkregion(sn, vmbase, (uvlong)0,
-	 (uvlong)vmbase,
-	  vmthreadmemsize, REGALLOC|REGFREE|REGRWX);
-	vmbase = r->v;
-	r = mkregion(sn, r->ve, highmemsize,
-	 (uvlong)0x200000,
-	 lowmemsize, REGALLOC|REGFREE|REGRWX);
-	vmcode = (void *) r->v;
-	print("vmbase %#p vmcode %#p\n", vmbase, vmcode);
-	memmove(vmcode, (void *)0x200000,
-	 (uvlong)sbrk(0) - 0x200000);
-.P2
-.SS "int vmthreadcreate(void (*fn)(void*), void *arg, uint stacksize)
-.P1
-{
-	rset(RPC, (uvlong)fn);
-	rset(RSP, (uvlong)vmbase + vmthreadmemsize - stacksize);
-	rset(RARG, (uvlong)arg+1);
-	// poison registers ... elided
-	state = VMRUNNING;
-	runloop();
-	return 0;
-}
-.P2
-.IT
-Set PC, RSP, and RARG to the arguments passed in
-.It
-Poison all registers we can
-.IT
-Sometimes it is a useful to test 64-bit entry code in a guest
 .SS "Now that it works ...
 .IT
 All kinds of things are possible: here is a host thread
@@ -641,7 +425,6 @@ watcher(void *arg)
 		sleep(1000);
 		yield();
 	}
-	write(1, "WX\\n", 3);
 	threadexits(nil);
 }
 .P2
@@ -711,11 +494,7 @@ vmcallreadfd(ulong fd, void *a, long n, vlong off)
 	v = valloc("vmcallreadfd", n);
 	err = valloc("vmcallreadfd error", ERRMAX);
 	if (waserror()) {
-		vfree("vmcallread", v);
-		kstrcpy(up->errstr, err, ERRMAX);
-		vfree("vmcallread error", err);
-		vfree("vmcallread vec", vec);
-		return -1;
+		bla bla
 	}
 	int ret = (int)vmcall(vmcallargs(vec, 
 		PREAD, err, ERRMAX,
@@ -738,9 +517,7 @@ vmcallreadfd(ulong fd, void *a, long n, vlong off)
 	vmdebug("ret is %d\n", (int)ret);
 	memmove(a, v, n);
 	poperror();
-	vfree("vmcallreadfd", v);
-	vfree("vmcallreadfd error", err);
-	vfree("vmcallreadfd vec", vec);
+	free stuff ...
 	return (long)ret;
 }
 .P2
@@ -797,4 +574,38 @@ bootdir
 	/$objtype/bin/auth/factotum
 	$CONF.bootfs.paq	bootfs.paq
 .P2
-.SS "Demo time"
+.SS "running the command
+.P1
+#!/bin/rc
+vmx -w text -c /fd/0,/fd/1  -M 1G 9vmpc64 'console=0'
+slay vmx | rc
+.P2
+.SS "bootrc
+.P1
+fn main{
+	# authentication agent
+	if(! test -f /srv/factotum){
+		x=(/boot/factotum -n -sfactotum)
+		if(~ $service cpu)
+			x=($x -S)
+		if not
+			x=($x -u)
+		if(! ~ $#debugfactotum 0)
+			x=($x -p)
+		must $x
+	}
+
+	echo TRY THIS RC ps works
+	bind /$v/$cputype /$cputype
+	/$cputype/bin/bind /$cputype/bin /bin
+	for(i in acme adm dist lib net rc sys usr dev)
+		bind /$v/$i /$i
+	bind -a /rc/bin /bin
+	ramfs
+	/bin/rc
+	echo DONE THAT RC
+	exit 1
+
+}
+
+.P2
