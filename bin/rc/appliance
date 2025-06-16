@@ -1,0 +1,8 @@
+#!/bin/rc
+echo ip addr add 192.168.0.187/24 dev eth0
+echo ip link set dev eth0 up
+vmx -c /fd/0,/fd/1 -M 1024M -n ether1 /usr/glenda/plan9cpulinux
+exit 0
+vmx -c /fd/0,/fd/1 -M 1024M -n ea:deadbeefcafe!ether0 /usr/glenda/plan9cpulinux
+
+vmx -c /fd/0,/fd/1 -M 1024M -n ether1 /usr/glenda/plan9cpulinux
