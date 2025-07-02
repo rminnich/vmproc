@@ -2,28 +2,20 @@
 
 rfork n
 
-ramfs -S sidecore
-mount -ac /srv/sidecore /
+ramfs -S sidecore.$pid
+mount -ac /srv/sidecore.$pid /
 mkdir -p /home/glenda
 bind -c /usr/glenda /home/glenda
 
 echo running sidecore version
 SIDECORE_ARCH=amd64
-if (! ~ $#SIDECORE_DISTRO 1) SIDECORE_DISTRO=py3-numpi
+if (! ~ $#SIDECORE_DISTRO 1) SIDECORE_DISTRO=py3-numpy
+if (! ~ $#LINUX_INIT 1) LINUX_INIT=/home/glenda/bin/linux_sh/linuxrc
 SIDECORE_KEYFILE=/usr/glenda/.ssh/cpu_rsa 
 HOME=/home/glenda
-#HOME=/shr
 PWD=/home/glenda
-#PWD=/
 
-sidecore -sp 17010 '-9p=false' '-nfs=true'  192.168.0.187 $*
+if (! ~ $#H 1) H=fe80::fced:beff:feef:d00d
+sidecore $SIDECORE_OPT -sp 17010 '-9p=false' '-nfs=true'  $H $LINUX_INIT $*
 
-
-exit 0
-PWD=/usr/glenda
-cpu -sp 17010 -key /usr/glenda/.ssh/cpu_rsa '-9p=false' '-nfs=true' '-namespace=/usr' 192.168.0.187 $*
-
-exit 0
-
-cpu -d -sp 17010 -key /usr/glenda/.ssh/cpu_rsa '-9p=false' '-nfs=true' '-namespace=/usr' 192.168.0.187 -d /bbin/rush
 
